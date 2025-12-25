@@ -2,36 +2,52 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import requests
 from scipy.spatial.distance import pdist, squareform
 from scipy.cluster.hierarchy import linkage, dendrogram
 
 st.set_page_config(page_title="Stylometry Lab", layout="wide")
 
 st.title("🔬 Stylometry Lab")
-st.markdown("Upload multiple `.txt` files to see how they cluster based on **Most Frequent Words (MFW)**.")
 
-# --- SIDEBAR SETTINGS ---
+# --- SETTINGS & DATA SOURCE ---
 with st.sidebar:
-    st.header("Analysis Settings")
-    mfw_limit = st.slider("MFW (Most Frequent Words)", 50, 1000, 500)
-    st.info("Higher MFW looks at common grammar/style; lower MFW focuses on core vocabulary.")
-
-# --- FILE UPLOAD ---
-files = st.file_uploader("Upload Raw Text Files (.txt)", accept_multiple_files=True)
-
-if files and len(files) > 1:
-    corpus = {}
+    st.header("1. Data Source")
+    data_mode = st.radio("Choose Corpus", ["Upload My Own", "Pre-loaded: UNRESTRICTED-10"])
     
-    # Process files into tokens
-    for f in files:
+    st.header("2. Analysis Settings")
+    mfw_limit = st.slider("MFW (Most Frequent Words)", 50, 1000, 500)
+
+# --- DATA INGESTION ---
+corpus = {}
+
+if data_mode == "Pre-loaded: UNRESTRICTED-10":
+    # List of files in your preloaded1 folder
+    base_url = "https://raw.githubusercontent.com/prihantoro-corpus/stylo/main/preloaded1/"
+    file_names = [f"text{i}.txt" for i in range(1, 11)] # Assuming names are text1.txt to text10.txt
+    
+    st.info("Fetching UNRESTRICTED-10 corpus from GitHub...")
+    
+    for name in file_names:
         try:
+            response = requests.get(base_url + name)
+            if response.status_code == 200:
+                text = response.text.lower()
+                tokens = [word for word in text.split() if word.isalpha()]
+                corpus[name] = tokens
+        except Exception as e:
+            st.error(f"Failed to load {name}")
+
+else:
+    files = st.file_uploader("Upload Raw Text Files (.txt)", accept_multiple_files=True)
+    if files:
+        for f in files:
             text = f.read().decode("utf-8").lower()
-            # Simple tokenization: keep only alphabetic words
             tokens = [word for word in text.split() if word.isalpha()]
             corpus[f.name] = tokens
-        except Exception as e:
-            st.error(f"Error reading {f.name}: {e}")
 
+# --- ANALYSIS ENGINE ---
+if len(corpus) > 1:
     # 1. Identify Global MFW
     all_tokens = [t for tokens in corpus.values() for t in tokens]
     top_features = pd.Series(all_tokens).value_counts().head(mfw_limit).index
@@ -45,40 +61,27 @@ if files and len(files) > 1:
         
     df = pd.DataFrame(matrix_data, index=corpus.keys())
     
-    # 3. Standardization (Z-Scores / Burrows's Delta prep)
-    # We replace 0 std with 1 to avoid division by zero errors
+    # 3. Standardization (Z-Scores)
     z_scores = (df - df.mean()) / df.std().replace(0, 1)
 
     # --- OUTPUTS ---
-    tab1, tab2, tab3 = st.tabs(["📊 Dendrogram", "🧪 Distance Matrix", "📋 Z-Score Data"])
+    tab1, tab2 = st.tabs(["📊 Dendrogram", "🧪 Distance Matrix"])
 
     with tab1:
         st.subheader("Stylistic Clustering")
-        st.write("This tree shows how 'close' texts are stylistically. Shorter horizontal branches indicate higher similarity.")
-        
-        fig, ax = plt.subplots(figsize=(10, 6))
-        # Ward's linkage provides the most distinct clusters for stylometry
+        fig, ax = plt.subplots(figsize=(10, 8))
         linkage_matrix = linkage(z_scores, method='ward')
         dendrogram(linkage_matrix, labels=list(corpus.keys()), ax=ax, orientation='left')
-        
-        plt.title(f"Cluster Analysis (Top {mfw_limit} MFW)")
-        plt.xlabel("Distance (Ward)")
+        plt.title(f"Cluster Analysis: {data_mode}")
         st.pyplot(fig)
         
 
     with tab2:
         st.subheader("Manhattan Distance Matrix")
-        # Calculate the actual "Delta" distance
         dist_matrix = squareform(pdist(z_scores, metric='cityblock'))
         dist_df = pd.DataFrame(dist_matrix, index=corpus.keys(), columns=corpus.keys())
-        st.dataframe(dist_df.style.background_gradient(cmap='Blues'))
+        st.dataframe(dist_df.style.background_gradient(cmap='Greens'))
+        
 
-    with tab3:
-        st.subheader("MFW Feature Table")
-        st.write("The standardized frequency of your top features.")
-        st.dataframe(z_scores)
-
-elif files:
-    st.warning("⚠️ Please upload at least **two** files to perform a comparative analysis.")
-else:
-    st.info("👋 Welcome! Please upload your text files in the sidebar or main area to begin.")
+elif data_mode == "Upload My Own":
+    st.info("Please upload at least two files to begin.")
