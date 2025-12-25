@@ -377,6 +377,26 @@ if len(raw_data) >= 2:
                     })
 
                 st.table(pd.DataFrame(results).drop(columns=['Dist_Val']))
+                
+                st.info("### 📝 Automated Authorship Narration")
+                
+                # Filter Q-files by their status for tailored narration
+                similar_texts = [r['Questioned'] for r in results if r['Status'] == "Closely Similar"]
+                outlier_texts = [r['Questioned'] for r in results if r['Status'] == "Outlier"]
+
+                # Narration for Possibility One (Close matches)
+                if similar_texts:
+                    st.markdown("**✅ Possibility One (High Similarity):**")
+                    st.write(f"The texts **{', '.join(similar_texts)}** are closely similar to the known stylistic profiles. They fall within the expected stylistic variance of your 'Known' corpus.")
+
+                # Narration for Possibility Two (Outliers)
+                if outlier_texts:
+                    st.markdown("**⚠️ Possibility Two (Stylistic Outliers):**")
+                    st.write(f"The texts **{', '.join(outlier_texts)}** are NOT closely similar to the known samples. While the system assigned them a match, they are statistically distant (Outliers), suggesting they may belong to an author not represented in your current 'Known' data.")
+
+                # Narration for Possibility Three (Internal Patterns)
+                st.markdown("**🔍 Possibility Three (Internal Clustering):**")
+                st.write("Examine the Scatter Plot in the 'Attribution Zones' tab. If outlier texts are clustering together in the red 'X' marks, it implies they share an author with each other, even if they don't match your 'Known' samples.")
     #==================================================
         else:
             st.warning(
