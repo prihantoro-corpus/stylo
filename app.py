@@ -376,7 +376,27 @@ if len(raw_data) >= 2:
                         "Dist_Val": min_dist # Stored for narration logic
                     })
 
-                st.table(pd.DataFrame(results).drop(columns=['Dist_Val']))
+# 1. Define the coloring function
+                def color_status(val):
+                    color = 'red' if val == 'Outlier' else 'green'
+                    return f'color: {color}; font-weight: bold'
+
+                # 2. Prepare the dataframe for display
+                df_results = pd.DataFrame(results)
+                df_display = df_results.drop(columns=['Dist_Val'])
+
+                # 3. Display the interactive, color-coded table
+                st.subheader("🏆 Attribution & Delta Rank")
+                st.dataframe(df_display.style.map(color_status, subset=['Status']), use_container_width=True)
+
+                # 4. Add the Download Button
+                csv = df_display.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Download Attribution Results (CSV)",
+                    data=csv,
+                    file_name="attribution_results.csv",
+                    mime="text/csv",
+                )
                 
                 st.info("### 📝 Automated Authorship Narration")
                 
