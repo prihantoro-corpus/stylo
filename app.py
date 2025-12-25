@@ -5,85 +5,57 @@ import matplotlib.pyplot as plt
 from scipy.spatial.distance import pdist, squareform
 from scipy.cluster.hierarchy import linkage, dendrogram
 
-# --- 1. ENGINE LOGIC (PASTED DIRECTLY HERE) ---
+st.set_page_config(page_title="Simple Stylo", layout="wide")
 
-def parse_treetagger(file, column_index):
-    """Parses a TreeTagger file and returns the selected column as a list."""
-    df = pd.read_csv(file, sep='\t', names=['word', 'tag', 'lemma'], quoting=3)
-    return df.iloc[:, column_index].astype(str).tolist()
+st.title("🔬 Simple Stylometry Lab")
+st.write("Upload 2 or more .txt files to see how they cluster based on word usage.")
 
-def build_frequency_matrix(corpus_dict, mfw_limit=500):
-    """Converts a dictionary of {doc_name: [tokens]} into a frequency matrix."""
-    all_tokens = [token for tokens in corpus_dict.values() for token in tokens]
-    top_features = pd.Series(all_tokens).value_counts().head(mfw_limit).index
-    
-    matrix = []
-    for doc, tokens in corpus_dict.items():
-        counts = pd.Series(tokens).value_counts()
-        row = counts.reindex(top_features, fill_value=0)
-        matrix.append(row)
-        
-    df_matrix = pd.DataFrame(matrix, index=corpus_dict.keys())
-    # Handle division by zero if std is 0
-    df_zscore = (df_matrix - df_matrix.mean()) / df_matrix.std().replace(0, 1)
-    return df_zscore
+# 1. Simple Settings
+mfw = st.sidebar.slider("Most Frequent Words", 100, 1000, 500)
 
-def calculate_delta(zscore_matrix):
-    """Calculates Manhattan distance (Burrows Delta) between all documents."""
-    distances = pdist(zscore_matrix, metric='cityblock') / zscore_matrix.shape[1]
-    return pd.DataFrame(squareform(distances), 
-                        index=zscore_matrix.index, 
-                        columns=zscore_matrix.index)
+# 2. File Upload (Untagged only)
+files = st.file_uploader("Upload Raw Text Files (.txt)", accept_multiple_files=True)
 
-# --- 2. STREAMLIT UI CODE ---
-
-st.set_page_config(page_title="Stylo Python", layout="wide")
-st.title("🔬 Stylometry Lab")
-
-# Sidebar Setup
-with st.sidebar:
-    st.header("Settings")
-    is_tagged = st.toggle("Use TreeTagger Files")
-    has_known = st.toggle("Include Known Authors")
-    mfw = st.slider("MFW Limit", 100, 2000, 500)
-    
-    tag_col = 0
-    if is_tagged:
-        mode = st.selectbox("Feature Layer", ["Word", "POS Tag", "Lemma"])
-        tag_col = {"Word": 0, "POS Tag": 1, "Lemma": 2}[mode]
-
-# File Upload
-uploader_label = "Upload TreeTagger (.tsv)" if is_tagged else "Upload Raw (.txt)"
-files = st.file_uploader(uploader_label, accept_multiple_files=True)
-
-if files:
+if files and len(files) > 1:
+    # 3. Processing Logic (Consolidated)
     corpus = {}
     for f in files:
-        if is_tagged:
-            # We call the function directly now, no 'engine.' prefix
-            corpus[f.name] = parse_treetagger(f, tag_col)
-        else:
-            corpus[f.name] = f.read().decode("utf-8").lower().split()
+        text = f.read().decode("utf-8").lower()
+        # Basic tokenization: words only
+        tokens = [word for word in text.split() if word.isalpha()]
+        corpus[f.name] = tokens
 
-    if len(corpus) > 1: # Need at least 2 files to cluster
-        # Process
-        z_matrix = build_frequency_matrix(corpus, mfw_limit=mfw)
-        delta_matrix = calculate_delta(z_matrix)
-
-        # Outputs
-        tab1, tab2 = st.tabs(["Clustering", "Data Matrix"])
+    # Find the Most Frequent Words across all texts
+    all_tokens = [t for tokens in corpus.values() for t in tokens]
+    top_features = pd.Series(all_tokens).value_counts().head(mfw).index
+    
+    # Build Matrix
+    matrix_data = []
+    for name, tokens in corpus.items():
+        counts = pd.Series(tokens).value_counts()
+        row = counts.reindex(top_features, fill_value=0)
+        matrix_data.append(row)
         
-        with tab1:
-            st.subheader("Dendrogram")
-            fig, ax = plt.subplots(figsize=(10, 7))
-            # Perform clustering
-            linked = linkage(z_matrix, 'ward')
-            dendrogram(linked, labels=list(corpus.keys()), ax=ax, orientation='left')
-            st.pyplot(fig)
-            
+    df = pd.DataFrame(matrix_data, index=corpus.keys())
+    
+    # Standardize (Z-Scores)
+    z_scores = (df - df.mean()) / df.std().replace(0, 1)
 
-        with tab2:
-            st.subheader("Z-Score Matrix (Top 10 Features)")
-            st.dataframe(z_matrix.iloc[:, :10])
-    else:
-        st.info("Please upload at least two files to see a comparison.")
+    # 4. Display Results
+    tab1, tab2 = st.tabs(["Cluster Map", "Word Frequencies"])
+
+    with tab1:
+        st.subheader("How similar are these texts?")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        # Ward's method is the industry standard for Stylo
+        linkage_matrix = linkage(z_scores, method='ward')
+        dendrogram(linkage_matrix, labels=list(corpus.keys()), ax=ax, orientation='left')
+        st.pyplot(fig)
+        
+
+    with tab2:
+        st.subheader("Top Word Z-Scores (First 10 MFW)")
+        st.dataframe(z_scores.iloc[:, :10])
+
+elif files:
+    st.info("Please upload at least two files to compare them.")
