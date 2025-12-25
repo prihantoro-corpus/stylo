@@ -35,80 +35,98 @@ with st.sidebar:
     data_mode = st.radio("Corpus", ["Upload My Own", "Pre-loaded: UNRESTRICTED-10"])
     mfw_limit = st.slider("MFW Limit", 50, 2000, 500)
     viz_mode = st.selectbox("Map Type", ["PCA (Linear)", "MDS (Distance-based)"])
+    
+    st.header("Exclusion List (Stopwords)")
+    use_exclusion = st.checkbox("Enable Stopword Filtering", value=False)
+    
+    # Pre-defined list of common English function words
+    default_stops = "the, and, of, to, a, in, is, it, that, was, as, for, with, on, be, at, by, this, had, not, are, but, from, or, have, an, they, which, one, you, were, her, all, she, there, would, their, we, him, been, has, when, who, will, no, if, out, so, said, what, up, its, about, into, than, them, can, only, other, new, some, could, time, these, two, may, then, do, first, any, my, now, such, like, our, over, man, me, even, most, made, after, also, did, many, before, must, through, back, years, where, much, your, way, well, down, should, because, each, just, those, people, mr, how"
+    
+    # Button to auto-fill the text area
+    if st.button("Load Default English Stopwords"):
+        st.session_state.stop_text = default_stops
+    
+    # The text area looks for content in session_state first
+    stop_input = st.text_area(
+        "Edit excluded words:",
+        value=st.session_state.get('stop_text', ""),
+        placeholder="Type words here, separated by commas..."
+    )
+    
+    stop_list = [w.strip().lower() for w in stop_input.split(",") if w.strip()]
 
 # --- 3. CORE ANALYTICS ENGINE ---
 corpus = load_github_corpus() if data_mode == "Pre-loaded: UNRESTRICTED-10" else {}
 if data_mode == "Upload My Own":
     files = st.file_uploader("Upload .txt", accept_multiple_files=True)
-    for f in files:
-        corpus[f.name] = [w for w in f.read().decode("utf-8").lower().split() if w.isalpha()]
+    if files:
+        for f in files:
+            corpus[f.name] = [w for w in f.read().decode("utf-8").lower().split() if w.isalpha()]
 
 if len(corpus) > 2:
-    # A. Matrix Building
-    all_tokens = [t for tokens in corpus.values() for t in tokens]
+    # APPLY EXCLUSION LIST
+    processed_corpus = {}
+    for name, tokens in corpus.items():
+        if use_exclusion and stop_list:
+            processed_corpus[name] = [w for w in tokens if w not in stop_list]
+        else:
+            processed_corpus[name] = tokens
+
+    # Matrix Building & Normalization
+    all_tokens = [t for tokens in processed_corpus.values() for t in tokens]
     top_features = pd.Series(all_tokens).value_counts().head(mfw_limit).index
     
-    matrix_data = [pd.Series(tokens).value_counts().reindex(top_features, fill_value=0) for tokens in corpus.values()]
-    df = pd.DataFrame(matrix_data, index=corpus.keys())
+    matrix_data = [pd.Series(tokens).value_counts().reindex(top_features, fill_value=0) for tokens in processed_corpus.values()]
+    df = pd.DataFrame(matrix_data, index=processed_corpus.keys())
     z_scores = (df - df.mean()) / df.std().replace(0, 1)
 
     # --- 4. OUTPUT TABS ---
     tabs = st.tabs(["🌳 Clustering", "🗺️ Spatial Map", "📈 Loadings", "🕸️ Bootstrap Network", "📊 Data"])
 
-    # TAB 1: DENDROGRAM
     with tabs[0]:
+        st.subheader("Dendrogram")
         fig, ax = plt.subplots(figsize=(10, 6))
         dendrogram(linkage(z_scores, method='ward'), labels=list(corpus.keys()), ax=ax, orientation='left')
         st.pyplot(fig)
+        
 
-    # TAB 2: PCA / MDS MAP
     with tabs[1]:
         st.subheader(f"{viz_mode} Visualization")
-        model = PCA(n_components=2) if "PCA" in viz_mode else MDS(n_components=2, dissimilarity='precomputed')
-        
-        # If MDS, we need a distance matrix first
+        model = PCA(n_components=2) if "PCA" in viz_mode else MDS(n_components=2, dissimilarity='precomputed', normalized_stress='auto')
         coords = model.fit_transform(z_scores) if "PCA" in viz_mode else model.fit_transform(squareform(pdist(z_scores, metric='cityblock')))
         
         fig, ax = plt.subplots()
-        ax.scatter(coords[:, 0], coords[:, 1], c='red')
+        ax.scatter(coords[:, 0], coords[:, 1], c='skyblue', edgecolors='navy')
         for i, txt in enumerate(corpus.keys()):
-            ax.annotate(txt, (coords[i, 0], coords[i, 1]))
+            ax.annotate(txt, (coords[i, 0], coords[i, 1]), fontsize=9)
         st.pyplot(fig)
         
 
-    # TAB 3: LOADING PLOTS (Marker Words)
     with tabs[2]:
-        st.subheader("Word Contributions (PCA Loadings)")
+        st.subheader("Word Contributions (Loadings)")
         pca_full = PCA(n_components=2).fit(z_scores)
         loadings = pd.DataFrame(pca_full.components_.T, index=top_features, columns=['PC1', 'PC2'])
-        st.write("Words driving the differences:")
+        st.write("Top 20 words influencing the primary separation (PC1):")
         st.dataframe(loadings.sort_values('PC1', ascending=False).head(20))
-        
 
-    # TAB 4: BOOTSTRAP NETWORK (Simplified Consensus)
     with tabs[3]:
         st.subheader("Consensus Network")
         G = nx.Graph()
         dist_matrix = squareform(pdist(z_scores, metric='cityblock'))
-        # Connect nodes if they are "close" (below median distance)
-        threshold = np.median(dist_matrix) * 0.6
+        threshold = np.percentile(dist_matrix, 25) # Connect the top 25% closest pairs
         for i, name_i in enumerate(corpus.keys()):
             for j, name_j in enumerate(corpus.keys()):
                 if i < j and dist_matrix[i, j] < threshold:
-                    G.add_edge(name_i, name_j, weight=1/dist_matrix[i, j])
-        
+                    G.add_edge(name_i, name_j)
         fig, ax = plt.subplots()
-        nx.draw(G, with_labels=True, node_color='lightblue', font_size=8, ax=ax)
+        nx.draw(G, with_labels=True, node_color='plum', edge_color='gray', node_size=800, font_size=8, ax=ax)
         st.pyplot(fig)
         
 
-    # TAB 5: CSV EXPORTS
     with tabs[4]:
-        col1, col2 = st.columns(2)
-        dist_df = pd.DataFrame(squareform(pdist(z_scores, metric='cityblock')), index=corpus.keys(), columns=corpus.keys())
-        col1.download_button("Download Distance Matrix (CSV)", dist_df.to_csv(), "distances.csv")
-        col2.download_button("Download Z-Scores (CSV)", z_scores.to_csv(), "zscores.csv")
-        st.dataframe(z_scores.head(10))
+        st.subheader("Export & Raw Data")
+        st.dataframe(z_scores)
+        st.download_button("Download Z-Scores (CSV)", z_scores.to_csv(), "zscores.csv")
 
 else:
-    st.info("Upload at least 3 files to enable Spatial Mapping and Networks.")
+    st.info("Please upload or load at least 3 texts to begin.")
