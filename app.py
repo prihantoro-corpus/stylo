@@ -1,16 +1,16 @@
 import streamlit as st
+import os
 import sys
-import subprocess
 
-# This will print the installed packages to your Streamlit App screen
+# Force the current directory into the Python path
+sys.path.append(os.path.dirname(__file__))
+
+# Try importing the local engine file specifically
 try:
-    import scipy
-    st.write(f"Scipy version: {scipy.__version__}")
+    import engine
 except ImportError:
-    st.error("Scipy is NOT installed. Check requirements.txt")
-    # This command helps debug what is actually installed on the server
-    installed_pkgs = subprocess.check_output([sys.executable, "-m", "pip", "freeze"]).decode()
-    st.text(installed_pkgs)
+    # Fallback for certain Streamlit versions
+    from . import engine
 
 
 import engine
