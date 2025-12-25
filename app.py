@@ -87,10 +87,11 @@ def build_matrix(corpus_dict, layer, mfw_limit, stops=[]):
         matrix.append(counts.reindex(top_feats, fill_value=0))
 
     df = pd.DataFrame(matrix, index=corpus_dict.keys())
-    # Standardize (Z-score) for distance metrics
-    return (df - df.mean()) / df.std().replace(0, 1), top_feats
-
-
+    # Standardize (Z-score) and handle empty/constant data
+    df_std = df.std().replace(0, 1)
+    z_scores = (df - df.mean()) / df_std
+    return z_scores.fillna(0), top_feats
+    
 # --- 2. APP CONFIG & SIDEBAR ---
 st.set_page_config(page_title="Stylo-Lab Professional", layout="wide")
 st.title("🔬 Stylometry Lab: Lexical, Structural & Attribution")
@@ -104,6 +105,12 @@ with st.sidebar:
     stop_input = st.text_area(
         "Stopwords", "the, and, of, to, a, in, is, it, that, was").lower()
     stop_list = [w.strip() for w in stop_input.split(",") if w.strip()]
+    
+    st.markdown("---")
+    st.header("Network Settings")
+    net_threshold = st.slider("Connection Sensitivity (Percentile)", 5, 95, 25)
+
+
 
 # --- 3. DATA PROCESSING ---
 raw_data = {}
@@ -154,7 +161,15 @@ if len(raw_data) >= 2:
                    orientation='left',
                    ax=ax)
         st.pyplot(fig)
+        
+# New suggestion logic
+        st.info("💡 **Cluster Suggestion**")
+        last = linkage(z_word, 'ward')[-10:, 2]
+        acceleration = np.diff(last, 2) 
+        suggested_k = acceleration.argmax() + 2
+        st.write(f"Based on variance, **{suggested_k} clusters** is likely optimal.")
 
+    
     with t2:
         st.subheader("PCA Visualization")
         pca_coords = PCA(n_components=2).fit_transform(z_word)
@@ -175,12 +190,15 @@ if len(raw_data) >= 2:
         st.write("Top Words driving differences (PC1):")
         st.dataframe(loadings.sort_values('PC1', ascending=False).head(20))
 
-    with t4:
+#--------------nih
+with t4:
         st.subheader("Document Network")
         G = nx.Graph()
         dist_matrix = squareform(pdist(z_word, metric='cityblock'))
-        threshold = np.percentile(dist_matrix, 25)
+        # Use the slider value from the sidebar here:
+        threshold = np.percentile(dist_matrix, net_threshold) 
         for i, ni in enumerate(raw_data.keys()):
+#--------------------------- nih
             for j, nj in enumerate(raw_data.keys()):
                 if i < j and dist_matrix[i, j] < threshold: G.add_edge(ni, nj)
         fig, ax = plt.subplots()
