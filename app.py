@@ -191,7 +191,7 @@ if len(raw_data) >= 2:
         st.dataframe(loadings.sort_values('PC1', ascending=False).head(20))
 
 #--------------nih
-with t4:
+    with t4:
         st.subheader("Document Network")
         G = nx.Graph()
         dist_matrix = squareform(pdist(z_word, metric='cityblock'))
