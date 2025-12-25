@@ -204,7 +204,6 @@ if len(raw_data) >= 2:
             "🌳 Dual Dendrograms", "🗺️ Grammar Map", "📈 Tag Loadings",
             "📊 Grammar Profile"
         ])
-
         with st2_t1:
             col1, col2 = st.columns(2)
             with col1:
