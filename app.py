@@ -208,7 +208,14 @@ if len(raw_data) >= 2:
     with t5:
         st.download_button("Download Z-Scores (CSV)", z_word.to_csv(),
                            "lexical_zscores.csv")
-        st.dataframe(z_word)
+        
+        search_query = st.text_input("🔍 Search for a specific word in the Z-scores:")
+        if search_query:
+            # Filters columns that contain the search string
+            filtered_df = z_word[z_word.columns[z_word.columns.str.contains(search_query.lower())]]
+            st.dataframe(filtered_df)
+        else:
+            st.dataframe(z_word)
 
     # --- SCENARIO 2: STRUCTURAL EXPLORER (Only if Tags Exist) ---
     if any(raw_data[next(iter(raw_data))]['tag']):
