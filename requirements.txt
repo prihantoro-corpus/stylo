@@ -1,5 +1,7 @@
-streamlit
-pandas
-matplotlib
+scikit-learn
+networkx
 scipy
+matplotlib
+pandas
 requests
+streamlit
