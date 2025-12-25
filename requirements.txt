@@ -1,9 +1,2 @@
-streamlit
-pandas
-numpy
 matplotlib
-seaborn
-scikit-learn
 scipy
-plotly
-faststylometry
