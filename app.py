@@ -97,41 +97,90 @@ if len(raw_data) > 2:
         # ... [POS Ratio Bar Chart Code] ...
         
 
-    # --- SCENARIO 3: ATTRIBUTION ---
-    if data_source == "KNOWN-10":
-        st.divider()
-        st.header("🔍 Scenario 3: Lexical Attribution")
-        k_idx = [i for i in z_word.index if i.startswith('K-')]
-        q_idx = [i for i in z_word.index if i.startswith('Q-')]
-        
+# --- SCENARIO 3: ATTRIBUTION ---
+if data_source == "KNOWN-10":
+    st.divider()
+    st.header("🔍 Scenario 3: Lexical Attribution")
+    
+    # Filter indices carefully
+    k_idx = [i for i in z_word.index if i.startswith('K-')]
+    q_idx = [i for i in z_word.index if i.startswith('Q-')]
+    
+    # ERROR PREVENTION: Check if we actually have K and Q files
+    if len(k_idx) < 2:
+        st.error("Scenario 3 requires at least 2 'Known' (K-) files to create zones.")
+    elif len(q_idx) == 0:
+        st.warning("No 'Questioned' (Q-) files found to attribute.")
+    else:
         at1, at2, at3 = st.tabs(["🗺️ Attribution Zones", "🎯 Accuracy/Confusion", "🏆 Delta Rank"])
         
         with at1:
             st.subheader("PCA with Authorship Zones")
-            labels = [n.split('-')[1] for n in k_idx]
+            # Create labels: Extract 'Author' from 'K-Author-Title.txt'
+            # If your files are just 'K-1.txt', this fallback handles it
+            labels = [n.split('-')[1] if len(n.split('-')) > 1 else "Unknown" for n in k_idx]
+            
             pca_mod = PCA(n_components=2)
             coords = pca_mod.fit_transform(z_word)
-            fig, ax = plt.subplots()
-            # SVM Zones
-            svc = SVC(kernel='linear').fit(coords[:len(k_idx)], labels)
-            # [Background mesh grid drawing code...]
-            ax.scatter(coords[:len(k_idx),0], coords[:len(k_idx),1], c='blue', label='Known')
-            ax.scatter(coords[len(k_idx):,0], coords[len(k_idx):,1], c='red', marker='x', label='Questioned')
+            
+            fig, ax = plt.subplots(figsize=(10, 7))
+            
+            # --- SVM ZONE LOGIC ---
+            # Only run if we have more than one author class
+            if len(set(labels)) > 1:
+                try:
+                    svc = SVC(kernel='linear').fit(coords[:len(k_idx)], labels)
+                    
+                    # Create a mesh grid for background coloring
+                    x_min, x_max = coords[:, 0].min() - 1, coords[:, 0].max() + 1
+                    y_min, y_max = coords[:, 1].min() - 1, coords[:, 1].max() + 1
+                    xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.1), np.arange(y_min, y_max, 0.1))
+                    
+                    Z = svc.predict(np.c_[xx.ravel(), yy.ravel()])
+                    # Use a numeric mapping for the background colors
+                    label_map = {name: i for i, name in enumerate(set(labels))}
+                    Z_num = np.array([label_map[z] for z in Z]).reshape(xx.shape)
+                    
+                    ax.contourf(xx, yy, Z_num, alpha=0.15, cmap='Paired')
+                except Exception as e:
+                    st.write("Could not draw zones (too little variance), showing scatter only.")
+
+            # Draw the points
+            # K points
+            ax.scatter(coords[:len(k_idx), 0], coords[:len(k_idx), 1], 
+                       c='blue', label='Known (K)', s=100, edgecolors='white')
+            # Q points
+            ax.scatter(coords[len(k_idx):, 0], coords[len(k_idx):, 1], 
+                       c='red', marker='X', label='Questioned (Q)', s=120)
+            
+            # Label the points
+            for i, txt in enumerate(z_word.index):
+                ax.annotate(txt, (coords[i, 0], coords[i, 1]), size=8, alpha=0.7)
+            
+            ax.legend()
             st.pyplot(fig)
             
 
         with at2:
+            # Confusion Matrix calculation
             dist_mat = cdist(z_word.loc[q_idx], z_word.loc[k_idx], metric='cityblock')
-            st.write("Distance Matrix (Lower is better)")
-            st.dataframe(pd.DataFrame(dist_mat, index=q_idx, columns=k_idx).style.background_gradient(cmap='RdYlGn_r'))
-            
+            dist_df = pd.DataFrame(dist_mat, index=q_idx, columns=k_idx)
+            st.write("Distance Matrix (Lower values = closer match)")
+            st.dataframe(dist_df.style.background_gradient(cmap='RdYlGn_r'))
+
         with at3:
+            # Rank and Narration
             results = []
             for i, q in enumerate(q_idx):
-                match = k_idx[np.argmin(dist_mat[i])]
-                results.append(f"The text **{q}** is likely written by the same person who wrote **{match}**.")
-            st.info("### 📝 Narration")
-            for r in results: st.write(r)
-
+                best_match_idx = np.argmin(dist_mat[i])
+                match_name = k_idx[best_match_idx]
+                results.append({"Questioned": q, "Top Match": match_name, "Distance": dist_mat[i][best_match_idx]})
+            
+            res_df = pd.DataFrame(results)
+            st.table(res_df)
+            
+            st.info("### 📝 Stylometric Conclusion")
+            for r in results:
+                st.write(f"The questioned text **{r['Questioned']}** shows the highest stylistic similarity to **{r['Top Match']}**.")
 else:
     st.info("Load a corpus to begin.")
