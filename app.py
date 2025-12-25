@@ -351,8 +351,19 @@ if len(raw_data) >= 2:
             with at3:
                 results = []
                 for i, q in enumerate(q_idx):
-                    match = k_idx[np.argmin(dist_mat[i])]
-                    results.append({"Questioned": q, "Top Match": match})
+                    dists = dist_mat[i]
+                    sorted_indices = np.argsort(dists)
+                    match_idx = sorted_indices[0]
+                    runner_up_idx = sorted_indices[1]
+                    
+                    # Calculate gap between 1st and 2nd best match
+                    confidence = (dists[runner_up_idx] - dists[match_idx]) / dists[runner_up_idx]
+                    
+                    results.append({
+                        "Questioned": q, 
+                        "Top Match": k_idx[match_idx],
+                        "Confidence": f"{confidence:.2%}"
+                    })
 
                 st.table(pd.DataFrame(results))
                 st.info("### 📝 Stylometric Conclusion")
