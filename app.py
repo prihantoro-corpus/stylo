@@ -12,47 +12,41 @@ from sklearn.svm import SVC
 # --- 1. DATA LOADING & MULTI-LAYER PARSING ---
 @st.cache_data(show_spinner="Fetching Corpora...")
 def load_corpus(folder_path):
-    """
-    Handles both standard folders and nested attribution folders (known3/question3).
-    """
     api_base = "https://api.github.com/repos/prihantoro-corpus/stylo/contents"
     raw_base = "https://raw.githubusercontent.com/prihantoro-corpus/stylo/main"
-    
     corpus = {}
-    
-    # Handle the Attribution scenario specifically to ensure subfolders are indexed
-    if folder_path == "preloaded3":
-        subfolders = ["known3", "question3"]
-    else:
-        subfolders = [""]
 
-    for sub in subfolders:
-        current_path = f"{folder_path}/{sub}".strip("/")
+    def fetch_recursive(current_path):
         api_url = f"{api_base}/{current_path}"
-        
         try:
             response = requests.get(api_url)
             if response.status_code == 200:
-                files = [f for f in response.json() if f['name'].endswith(('.txt', '.tsv'))]
-                for f_info in files:
-                    name = f_info['name']
-                    r = requests.get(f"{raw_base}/{current_path}/{name}")
-                    if r.status_code == 200:
-                        lines = r.text.strip().split('\n')
-                        # Detect TreeTagger (3 columns)
-                        if '\t' in lines[0]:
-                            data = [line.split('\t') for line in lines if '\t' in line]
-                            corpus[name] = {
-                                'word': [row[0].lower() for row in data],
-                                'tag': [row[1] for row in data],
-                                'lemma': [row[2].lower() for row in data]
-                            }
-                        else:
-                            words = [w for w in r.text.lower().split() if w.isalpha()]
-                            corpus[name] = {'word': words, 'tag': [], 'lemma': []}
-        except:
-            continue
+                items = response.json()
+                for item in items:
+                    if item['type'] == 'dir':
+                        # This line allows it to enter 'known3' and 'question3'
+                        fetch_recursive(f"{current_path}/{item['name']}")
+                    elif item['name'].endswith(('.txt', '.tsv')):
+                        raw_url = f"{raw_base}/{current_path}/{item['name']}"
+                        r = requests.get(raw_url)
+                        if r.status_code == 200:
+                            lines = r.text.strip().split('\n')
+                            if '\t' in lines[0]: # TreeTagger
+                                data = [line.split('\t') for line in lines if '\t' in line]
+                                corpus[item['name']] = {
+                                    'word': [row[0].lower() for row in data if len(row)>0],
+                                    'tag': [row[1] for row in data if len(row)>1],
+                                    'lemma': [row[2].lower() for row in data if len(row)>2]
+                                }
+                            else: # Plain Text
+                                words = [w for w in r.text.lower().split() if w.isalpha()]
+                                corpus[item['name']] = {'word': words, 'tag': [], 'lemma': []}
+        except: pass
+
+    fetch_recursive(folder_path)
     return corpus
+#----------------
+
 
 def build_matrix(corpus_dict, layer, mfw_limit, stops=[]):
     all_tokens = []
@@ -190,12 +184,25 @@ if len(raw_data) >= 2:
             st.bar_chart(profile_df)
             
 
-    # --- SCENARIO 3: ATTRIBUTION ---
+# --- SCENARIO 3: ATTRIBUTION ---
     if data_source == "KNOWN-10":
         st.divider()
         st.header("🔍 Scenario 3: Lexical Attribution")
+        
+        # Identification Logic (Matches K- and Q- prefixes)
         k_idx = [i for i in z_word.index if i.startswith('K-')]
         q_idx = [i for i in z_word.index if i.startswith('Q-')]
+        
+        # --- INSERT THIS DEBUG BLOCK HERE ---
+        with st.expander("📂 View Loaded Data Inventory"):
+            st.write(f"Known Files found: {len(k_idx)}")
+            st.write(k_idx)
+            st.write(f"Questioned Files found: {len(q_idx)}")
+            st.write(q_idx)
+        # -------------------------------------
+
+        if len(k_idx) >= 2:
+            # ... rest of your existing at1, at2, at3 code ...
         
         if len(k_idx) >= 2:
             at1, at2, at3 = st.tabs(["🗺️ Attribution Zones", "🎯 Accuracy/Confusion", "🏆 Delta Rank"])
