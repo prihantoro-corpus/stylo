@@ -12,6 +12,10 @@ from sklearn.svm import SVC
 # --- 1. DATA LOADING & MULTI-LAYER PARSING ---
 @st.cache_data(show_spinner="Fetching Corpora...")
 def load_corpus(folder_path):
+    """
+    Recursively fetches files from GitHub to handle nested subfolders
+    like preloaded3/known3 and preloaded3/question3.
+    """
     api_base = "https://api.github.com/repos/prihantoro-corpus/stylo/contents"
     raw_base = "https://raw.githubusercontent.com/prihantoro-corpus/stylo/main"
     corpus = {}
@@ -24,14 +28,15 @@ def load_corpus(folder_path):
                 items = response.json()
                 for item in items:
                     if item['type'] == 'dir':
-                        # This line allows it to enter 'known3' and 'question3'
+                        # Dig into subdirectories
                         fetch_recursive(f"{current_path}/{item['name']}")
                     elif item['name'].endswith(('.txt', '.tsv')):
                         raw_url = f"{raw_base}/{current_path}/{item['name']}"
                         r = requests.get(raw_url)
                         if r.status_code == 200:
                             lines = r.text.strip().split('\n')
-                            if '\t' in lines[0]: # TreeTagger
+                            # Detect TreeTagger (3 columns)
+                            if '\t' in lines[0]:
                                 data = [line.split('\t') for line in lines if '\t' in line]
                                 corpus[item['name']] = {
                                     'word': [row[0].lower() for row in data if len(row)>0],
@@ -41,18 +46,20 @@ def load_corpus(folder_path):
                             else: # Plain Text
                                 words = [w for w in r.text.lower().split() if w.isalpha()]
                                 corpus[item['name']] = {'word': words, 'tag': [], 'lemma': []}
-        except: pass
+        except:
+            pass
 
     fetch_recursive(folder_path)
     return corpus
-#----------------
-
 
 def build_matrix(corpus_dict, layer, mfw_limit, stops=[]):
     all_tokens = []
     for doc in corpus_dict.values():
         all_tokens.extend([t for t in doc[layer] if t not in stops])
     
+    if not all_tokens:
+        return pd.DataFrame(), []
+
     top_feats = pd.Series(all_tokens).value_counts().head(mfw_limit).index
     
     matrix = []
@@ -61,7 +68,7 @@ def build_matrix(corpus_dict, layer, mfw_limit, stops=[]):
         matrix.append(counts.reindex(top_feats, fill_value=0))
         
     df = pd.DataFrame(matrix, index=corpus_dict.keys())
-    # Standardize (Z-score)
+    # Standardize (Z-score) for distance metrics
     return (df - df.mean()) / df.std().replace(0, 1), top_feats
 
 # --- 2. APP CONFIG & SIDEBAR ---
@@ -72,7 +79,7 @@ with st.sidebar:
     st.header("Selection")
     data_source = st.radio("Corpus", ["UNRESTRICTED-10", "TAGGED-10", "KNOWN-10", "Upload Files"])
     mfw_limit = st.slider("MFW Limit", 50, 2000, 500)
-    use_stop = st.checkbox("Filter Stopwords")
+    use_stop = st.checkbox("Filter Stopwords", value=True)
     stop_input = st.text_area("Stopwords", "the, and, of, to, a, in, is, it, that, was").lower()
     stop_list = [w.strip() for w in stop_input.split(",") if w.strip()]
 
@@ -90,13 +97,19 @@ else:
         content = f.read().decode("utf-8")
         if f.name.endswith('.tsv'):
             data = [line.split('\t') for line in content.strip().split('\n') if '\t' in line]
-            raw_data[f.name] = {'word': [r[0].lower() for r in data], 'tag': [r[1] for r in data], 'lemma': [r[2].lower() for r in data]}
+            raw_data[f.name] = {
+                'word': [r[0].lower() for r in data], 
+                'tag': [r[1] for r in data], 
+                'lemma': [r[2].lower() for r in data]
+            }
         else:
-            raw_data[f.name] = {'word': [w for w in content.lower().split() if w.isalpha()], 'tag': [], 'lemma': []}
+            raw_data[f.name] = {
+                'word': [w for w in content.lower().split() if w.isalpha()], 
+                'tag': [], 'lemma': []
+            }
 
 # --- 4. ANALYTICS ENGINES ---
 if len(raw_data) >= 2:
-    # Always build Scenario 1 (Lexical)
     z_word, feats_word = build_matrix(raw_data, 'word', mfw_limit, stop_list if use_stop else [])
 
     # --- SCENARIO 1: LEXICAL EXPLORER ---
@@ -117,12 +130,15 @@ if len(raw_data) >= 2:
             ax.annotate(txt, (pca_coords[i,0], pca_coords[i,1]), size=8)
         st.pyplot(fig)
         
+
+[Image of a PCA scatter plot]
+
+        
     with t3:
         pca_model = PCA(n_components=2).fit(z_word)
         loadings = pd.DataFrame(pca_model.components_.T, index=feats_word, columns=['PC1', 'PC2'])
         st.write("Top Words driving differences (PC1):")
         st.dataframe(loadings.sort_values('PC1', ascending=False).head(20))
-        
         
     with t4:
         G = nx.Graph()
@@ -134,7 +150,6 @@ if len(raw_data) >= 2:
         fig, ax = plt.subplots()
         nx.draw(G, with_labels=True, node_color='orange', ax=ax, font_size=8)
         st.pyplot(fig)
-        
         
     with t5:
         st.download_button("Download Z-Scores (CSV)", z_word.to_csv(), "lexical_zscores.csv")
@@ -184,7 +199,7 @@ if len(raw_data) >= 2:
             st.bar_chart(profile_df)
             
 
-# --- SCENARIO 3: ATTRIBUTION ---
+    # --- SCENARIO 3: ATTRIBUTION ---
     if data_source == "KNOWN-10":
         st.divider()
         st.header("🔍 Scenario 3: Lexical Attribution")
@@ -193,21 +208,17 @@ if len(raw_data) >= 2:
         k_idx = [i for i in z_word.index if i.startswith('K-')]
         q_idx = [i for i in z_word.index if i.startswith('Q-')]
         
-        # --- INSERT THIS DEBUG BLOCK HERE ---
         with st.expander("📂 View Loaded Data Inventory"):
             st.write(f"Known Files found: {len(k_idx)}")
             st.write(k_idx)
             st.write(f"Questioned Files found: {len(q_idx)}")
             st.write(q_idx)
-        # -------------------------------------
 
-        if len(k_idx) >= 2:
-            # ... rest of your existing at1, at2, at3 code ...
-        
-        if len(k_idx) >= 2:
+        if len(k_idx) >= 2 and len(q_idx) >= 1:
             at1, at2, at3 = st.tabs(["🗺️ Attribution Zones", "🎯 Accuracy/Confusion", "🏆 Delta Rank"])
             
             with at1:
+                st.subheader("Authorship Zones (SVM)")
                 labels = [n.split('-')[1] if '-' in n else "Unknown" for n in k_idx]
                 pca_mod = PCA(n_components=2)
                 coords = pca_mod.fit_transform(z_word)
@@ -220,20 +231,22 @@ if len(raw_data) >= 2:
                         y_min, y_max = coords[:, 1].min() - 1, coords[:, 1].max() + 1
                         xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.1), np.arange(y_min, y_max, 0.1))
                         Z = svc.predict(np.c_[xx.ravel(), yy.ravel()])
-                        label_map = {name: i for i, name in enumerate(set(labels))}
+                        label_map = {name: i for i, name in enumerate(sorted(list(set(labels))))}
                         Z_num = np.array([label_map[z] for z in Z]).reshape(xx.shape)
                         ax.contourf(xx, yy, Z_num, alpha=0.15, cmap='Paired')
-                    except: pass
+                    except:
+                        pass
                 
                 ax.scatter(coords[:len(k_idx),0], coords[:len(k_idx),1], c='blue', label='Known')
-                ax.scatter(coords[len(k_idx):,0], coords[len(k_idx):,1], c='red', marker='X', label='Questioned')
-                for i, txt in enumerate(z_word.index): ax.annotate(txt, (coords[i,0], coords[i,1]), size=8)
+                ax.scatter(coords[len(k_idx):,0], coords[len(k_idx):,1], c='red', marker='X', s=100, label='Questioned')
+                for i, txt in enumerate(z_word.index): 
+                    ax.annotate(txt, (coords[i,0], coords[i,1]), size=8)
                 ax.legend()
                 st.pyplot(fig)
-                
 
             with at2:
                 dist_mat = cdist(z_word.loc[q_idx], z_word.loc[k_idx], metric='cityblock')
+                st.write("### Distance Matrix (Burrows Delta Equivalent)")
                 st.dataframe(pd.DataFrame(dist_mat, index=q_idx, columns=k_idx).style.background_gradient(cmap='RdYlGn_r'))
                 
             with at3:
@@ -246,6 +259,8 @@ if len(raw_data) >= 2:
                 st.info("### 📝 Stylometric Conclusion")
                 for r in results:
                     st.write(f"The text **{r['Questioned']}** is likely written by the same person who wrote **{r['Top Match']}**.")
+        else:
+            st.error("Missing files: Ensure GitHub has files starting with 'K-' and 'Q-'.")
 
 else:
     st.info("Please load or upload at least 2 files to generate the Lexical Explorer.")
