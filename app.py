@@ -1,4 +1,18 @@
 import streamlit as st
+import sys
+import subprocess
+
+# This will print the installed packages to your Streamlit App screen
+try:
+    import scipy
+    st.write(f"Scipy version: {scipy.__version__}")
+except ImportError:
+    st.error("Scipy is NOT installed. Check requirements.txt")
+    # This command helps debug what is actually installed on the server
+    installed_pkgs = subprocess.check_output([sys.executable, "-m", "pip", "freeze"]).decode()
+    st.text(installed_pkgs)
+
+
 import engine
 from scipy.cluster.hierarchy import linkage, dendrogram
 import matplotlib.pyplot as plt
