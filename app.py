@@ -350,27 +350,34 @@ if len(raw_data) >= 2:
 
             with at3:
                 results = []
+                
+                # Statistical Threshold Logic:
+                # We calculate how varied the 'Known' texts are to find a 'normal' distance
+                k_internal_dists = pdist(z_word.loc[k_idx], metric='cityblock')
+                outlier_threshold = np.mean(k_internal_dists) + np.std(k_internal_dists)
+
                 for i, q in enumerate(q_idx):
                     dists = dist_mat[i]
+                    min_dist = np.min(dists) # Closest distance found
                     sorted_indices = np.argsort(dists)
                     match_idx = sorted_indices[0]
                     runner_up_idx = sorted_indices[1]
                     
-                    # Calculate gap between 1st and 2nd best match
                     confidence = (dists[runner_up_idx] - dists[match_idx]) / dists[runner_up_idx]
+                    
+                    # Assign a status based on the threshold
+                    is_outlier = min_dist > outlier_threshold
                     
                     results.append({
                         "Questioned": q, 
                         "Top Match": k_idx[match_idx],
-                        "Confidence": f"{confidence:.2%}"
+                        "Confidence": f"{confidence:.2%}",
+                        "Status": "Outlier" if is_outlier else "Closely Similar",
+                        "Dist_Val": min_dist # Stored for narration logic
                     })
 
-                st.table(pd.DataFrame(results))
-                st.info("### 📝 Stylometric Conclusion")
-                for r in results:
-                    st.write(
-                        f"The text **{r['Questioned']}** is most similar to **{r['Top Match']}**."
-                    )
+                st.table(pd.DataFrame(results).drop(columns=['Dist_Val']))
+    #==================================================
         else:
             st.warning(
                 "Insufficient data for attribution. Ensure filenames start with 'K-' and 'Q-'."
