@@ -117,12 +117,14 @@ if len(raw_data) >= 2:
     t1, t2, t3, t4, t5 = st.tabs(["🌳 Dendrogram", "🗺️ PCA Map", "📈 Loadings", "🕸️ Network", "📊 CSV Data"])
     
     with t1:
+        st.subheader("Hierarchical Clustering")
         fig, ax = plt.subplots(figsize=(10, 5))
         dendrogram(linkage(z_word, 'ward'), labels=list(raw_data.keys()), orientation='left', ax=ax)
         st.pyplot(fig)
         
     
     with t2:
+        st.subheader("PCA Visualization")
         pca_coords = PCA(n_components=2).fit_transform(z_word)
         fig, ax = plt.subplots()
         ax.scatter(pca_coords[:,0], pca_coords[:,1], c='skyblue', edgecolors='navy')
@@ -130,9 +132,6 @@ if len(raw_data) >= 2:
             ax.annotate(txt, (pca_coords[i,0], pca_coords[i,1]), size=8)
         st.pyplot(fig)
         
-
-[Image of a PCA scatter plot]
-
         
     with t3:
         pca_model = PCA(n_components=2).fit(z_word)
@@ -141,6 +140,7 @@ if len(raw_data) >= 2:
         st.dataframe(loadings.sort_values('PC1', ascending=False).head(20))
         
     with t4:
+        st.subheader("Document Network")
         G = nx.Graph()
         dist_matrix = squareform(pdist(z_word, metric='cityblock'))
         threshold = np.percentile(dist_matrix, 25)
@@ -204,15 +204,12 @@ if len(raw_data) >= 2:
         st.divider()
         st.header("🔍 Scenario 3: Lexical Attribution")
         
-        # Identification Logic (Matches K- and Q- prefixes)
         k_idx = [i for i in z_word.index if i.startswith('K-')]
         q_idx = [i for i in z_word.index if i.startswith('Q-')]
         
         with st.expander("📂 View Loaded Data Inventory"):
-            st.write(f"Known Files found: {len(k_idx)}")
-            st.write(k_idx)
-            st.write(f"Questioned Files found: {len(q_idx)}")
-            st.write(q_idx)
+            st.write(f"Known Files: {len(k_idx)} found.")
+            st.write(f"Questioned Files: {len(q_idx)} found.")
 
         if len(k_idx) >= 2 and len(q_idx) >= 1:
             at1, at2, at3 = st.tabs(["🗺️ Attribution Zones", "🎯 Accuracy/Confusion", "🏆 Delta Rank"])
@@ -233,7 +230,7 @@ if len(raw_data) >= 2:
                         Z = svc.predict(np.c_[xx.ravel(), yy.ravel()])
                         label_map = {name: i for i, name in enumerate(sorted(list(set(labels))))}
                         Z_num = np.array([label_map[z] for z in Z]).reshape(xx.shape)
-                        ax.contourf(xx, yy, Z_num, alpha=0.15, cmap='Paired')
+                        ax.contourf(xx, yy, Z_num, alpha=0.15, cmap='coolwarm')
                     except:
                         pass
                 
@@ -246,7 +243,7 @@ if len(raw_data) >= 2:
 
             with at2:
                 dist_mat = cdist(z_word.loc[q_idx], z_word.loc[k_idx], metric='cityblock')
-                st.write("### Distance Matrix (Burrows Delta Equivalent)")
+                st.write("### Distance Matrix (Manhattan Distance)")
                 st.dataframe(pd.DataFrame(dist_mat, index=q_idx, columns=k_idx).style.background_gradient(cmap='RdYlGn_r'))
                 
             with at3:
@@ -258,9 +255,9 @@ if len(raw_data) >= 2:
                 st.table(pd.DataFrame(results))
                 st.info("### 📝 Stylometric Conclusion")
                 for r in results:
-                    st.write(f"The text **{r['Questioned']}** is likely written by the same person who wrote **{r['Top Match']}**.")
+                    st.write(f"The text **{r['Questioned']}** is most similar to **{r['Top Match']}**.")
         else:
-            st.error("Missing files: Ensure GitHub has files starting with 'K-' and 'Q-'.")
+            st.warning("Insufficient data for attribution. Ensure filenames start with 'K-' and 'Q-'.")
 
 else:
-    st.info("Please load or upload at least 2 files to generate the Lexical Explorer.")
+    st.info("Please load or upload at least 2 files to generate analytics.")
