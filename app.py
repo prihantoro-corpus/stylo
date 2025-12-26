@@ -13,8 +13,6 @@ from sklearn.svm import SVC
 
 # --- 1. DATA LOADING & MULTI-LAYER PARSING ---
 @st.cache_data(show_spinner="Fetching Corpora...")
-@st.cache_data(show_spinner="Fetching Corpora...")
-@st.cache_data(show_spinner="Fetching Corpora...")
 def load_corpus(folder_path):
     api_base = "https://api.github.com/repos/prihantoro-corpus/stylo/contents"
     raw_base = "https://raw.githubusercontent.com/prihantoro-corpus/stylo/main"
