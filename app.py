@@ -5,11 +5,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import requests
 import networkx as nx
+
 from scipy.spatial.distance import pdist, squareform, cdist
 from scipy.cluster.hierarchy import linkage, dendrogram
 from sklearn.decomposition import PCA
 from sklearn.svm import SVC
-
 
 # --- 1. DATA LOADING & MULTI-LAYER PARSING ---
 @st.cache_data(show_spinner="Fetching Corpora...")
@@ -155,15 +155,6 @@ elif data_source == "Upload Files":
     for f in uploaded or []:
         raw_data[f.name] = parse_uploaded_file(f)
 
-# --- 🔑 Known & Questioned uploads (ALWAYS ACTIVE) ---
-# These are appended regardless of corpus choice
-# Filenames are normalized for Scenario 3 attribution
-
-for f in uploaded_known or []:
-    raw_data[f"K-{f.name}"] = parse_uploaded_file(f)
-
-for f in uploaded_questioned or []:
-    raw_data[f"Q-{f.name}"] = parse_uploaded_file(f)
 
 
 # --- 4. ANALYTICS ENGINES ---
@@ -299,143 +290,122 @@ if len(raw_data) >= 2:
                                       index=raw_data.keys()).fillna(0)
             st.bar_chart(profile_df)
 
-# === END SCENARIO 1 & 2 ===
+if 'z_word' not in locals():
+    st.info("Upload or load at least 2 texts to enable attribution.")
+else:
+    # =====================================================
+    # --- SCENARIO 3: ATTRIBUTION (INDEPENDENT) ---
+    # =====================================================
+    st.divider()
+    st.header("🔍 Scenario 3: Lexical Attribution")
+    st.subheader("📂 Upload Authorship Data")
 
-# =====================================================
-# --- SCENARIO 3: ATTRIBUTION (INDEPENDENT) ---
-# =====================================================
+    k_idx = [i for i in z_word.index if i.startswith('K-')]
+    q_idx = [i for i in z_word.index if i.startswith('Q-')]
 
-        st.divider()
-        st.header("🔍 Scenario 3: Lexical Attribution")
-        st.subheader("📂 Upload Authorship Data")
-
-        col_k, col_q = st.columns(2)
-        
-        with col_k:
-            uploaded_known = st.file_uploader(
-                "Known texts (K)",
-                type=["txt", "tsv"],
-                accept_multiple_files=True,
-                key="known_upload_main"
-            )
-        
-        with col_q:
-            uploaded_questioned = st.file_uploader(
-                "Questioned texts (Q)",
-                type=["txt", "tsv"],
-                accept_multiple_files=True,
-                key="questioned_upload_main"
-            )
-
-        
-        k_idx = [i for i in z_word.index if i.startswith('K-')]
-        q_idx = [i for i in z_word.index if i.startswith('Q-')]
-        
-        with st.expander("📂 View Loaded Data Inventory"):
-            st.write(f"Known Files: {len(k_idx)} found.")
-            st.write(f"Questioned Files: {len(q_idx)} found.")
-        
-        if len(k_idx) >= 2 and len(q_idx) >= 1:
-
-            # 1. Global Calculations for all tabs
-            labels = [n.split('-')[1] if '-' in n else "Unknown" for n in k_idx]
-            pca_mod = PCA(n_components=2).fit(z_word)
-            coords = pca_mod.transform(z_word)
-
-            at1, at2, at3, at4 = st.tabs([
-                "🗺️ Attribution Zones", "🎯 Accuracy/Confusion", "🏆 Delta Rank", "🔑 Known Markers"
-            ])
-
-            with at1:
-                st.subheader("Authorship Zones (SVM)")
-                fig, ax = plt.subplots(figsize=(10, 7))
-                if len(set(labels)) > 1:
-                    try:
-                        svc = SVC(kernel='linear').fit(coords[:len(k_idx)], labels)
-                        x_min, x_max = coords[:, 0].min() - 1, coords[:, 0].max() + 1
-                        y_min, y_max = coords[:, 1].min() - 1, coords[:, 1].max() + 1
-                        xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.1), np.arange(y_min, y_max, 0.1))
-                        Z = svc.predict(np.c_[xx.ravel(), yy.ravel()])
-                        label_map = {name: i for i, name in enumerate(sorted(list(set(labels))))}
-                        Z_num = np.array([label_map[z] for z in Z]).reshape(xx.shape)
-                        ax.contourf(xx, yy, Z_num, alpha=0.15, cmap='coolwarm')
-                    except: pass
-                
-                ax.scatter(coords[:len(k_idx), 0], coords[:len(k_idx), 1], c='blue', label='Known')
-                ax.scatter(coords[len(k_idx):, 0], coords[len(k_idx):, 1], c='red', marker='X', s=100, label='Questioned')
-                for i, txt in enumerate(z_word.index):
-                    ax.annotate(txt, (coords[i, 0], coords[i, 1]), size=8)
-                ax.legend()
-                st.pyplot(fig)
-
-            with at2:
-                dist_mat = cdist(z_word.loc[q_idx], z_word.loc[k_idx], metric='cityblock')
-                st.write("### Distance Matrix (Manhattan Distance)")
-                st.dataframe(pd.DataFrame(dist_mat, index=q_idx, columns=k_idx).style.background_gradient(cmap='RdYlGn_r'))
-
-            with at3:
-                results = []
-                dist_mat = cdist(z_word.loc[q_idx], z_word.loc[k_idx], metric='cityblock')
-                k_internal_dists = pdist(z_word.loc[k_idx], metric='cityblock')
-                outlier_threshold = np.mean(k_internal_dists) + np.std(k_internal_dists)
-
-                for i, q in enumerate(q_idx):
-                    dists = dist_mat[i]
-                    min_dist = np.min(dists)
-                    sorted_indices = np.argsort(dists)
-                    match_idx, runner_up_idx = sorted_indices[0], sorted_indices[1]
-                    confidence = (dists[runner_up_idx] - dists[match_idx]) / dists[runner_up_idx]
-                    is_outlier = min_dist > outlier_threshold
-                    results.append({
-                        "Questioned": q, "Top Match": k_idx[match_idx], 
-                        "Confidence": f"{confidence:.2%}",
-                        "Status": "Outlier" if is_outlier else "Closely Similar",
-                        "Dist_Val": min_dist
-                    })
-
-                def color_status(val):
-                    color = 'red' if val == 'Outlier' else 'green'
-                    return f'color: {color}; font-weight: bold'
-
-                df_display = pd.DataFrame(results).drop(columns=['Dist_Val'])
-                st.subheader("🏆 Attribution & Delta Rank")
-                st.dataframe(df_display.style.map(color_status, subset=['Status']), use_container_width=True)
-                st.download_button("📥 Download Results (CSV)", df_display.to_csv(index=False), "attribution.csv")
-
-                st.info("### 📝 Automated Authorship Narration")
-                similar_texts = [r['Questioned'] for r in results if r['Status'] == "Closely Similar"]
-                outlier_texts = [r['Questioned'] for r in results if r['Status'] == "Outlier"]
-                
-                if similar_texts:
-                    st.markdown("**✅ Possibility One (High Similarity):**")
-                    st.write(f"The texts **{', '.join(similar_texts)}** fall within expected variance.")
-                if outlier_texts:
-                    st.markdown("**⚠️ Possibility Two (Stylistic Outliers):**")
-                    st.write(f"The texts **{', '.join(outlier_texts)}** are statistically distant.")
-                
-                st.divider()
-                st.subheader("🏁 Final Verdict Summary")
-                cv1, cv2, cv3 = st.columns(3)
-                cv1.metric("Total", len(results))
-                cv2.metric("Attributed", len(similar_texts))
-                cv3.metric("Outliers", len(outlier_texts))
-
-            with at4:
-                st.subheader("🔑 Key Stylistic Markers of Known Texts")
-                known_mean_coord = np.mean(coords[:len(k_idx), 0])
-                direction = 1 if known_mean_coord > 0 else -1
-                weights = pca_mod.components_[0] * direction
-                marker_df = pd.DataFrame({'Word': list(feats_word), 'Weight': weights}).sort_values('Weight', ascending=False)
-                top_markers = marker_df[marker_df['Weight'] > 0].head(15)
-                
-                if not top_markers.empty:
-                    col_m1, col_m2 = st.columns([1, 2])
-                    with col_m1: st.dataframe(top_markers, hide_index=True)
-                    with col_m2: st.bar_chart(top_markers.set_index('Word'))
-
-        else:
-            st.warning("Insufficient data. Ensure filenames start with 'K-' and 'Q-'.")
+    with st.expander("📂 View Loaded Data Inventory"):
+        st.write(f"Known Files: {len(k_idx)} found.")
+        st.write(f"Questioned Files: {len(q_idx)} found.")
+    
+    if len(k_idx) >= 2 and len(q_idx) >= 1:
+    
+        # 1. Global Calculations for all tabs
+        labels = [n.split('-')[1] if '-' in n else "Unknown" for n in k_idx]
+        pca_mod = PCA(n_components=2).fit(z_word)
+        coords = pca_mod.transform(z_word)
+    
+        at1, at2, at3, at4 = st.tabs([
+            "🗺️ Attribution Zones", "🎯 Accuracy/Confusion", "🏆 Delta Rank", "🔑 Known Markers"
+        ])
+    
+        with at1:
+            st.subheader("Authorship Zones (SVM)")
+            fig, ax = plt.subplots(figsize=(10, 7))
+            if len(set(labels)) > 1:
+                try:
+                    svc = SVC(kernel='linear').fit(coords[:len(k_idx)], labels)
+                    x_min, x_max = coords[:, 0].min() - 1, coords[:, 0].max() + 1
+                    y_min, y_max = coords[:, 1].min() - 1, coords[:, 1].max() + 1
+                    xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.1), np.arange(y_min, y_max, 0.1))
+                    Z = svc.predict(np.c_[xx.ravel(), yy.ravel()])
+                    label_map = {name: i for i, name in enumerate(sorted(list(set(labels))))}
+                    Z_num = np.array([label_map[z] for z in Z]).reshape(xx.shape)
+                    ax.contourf(xx, yy, Z_num, alpha=0.15, cmap='coolwarm')
+                except: pass
+            
+            ax.scatter(coords[:len(k_idx), 0], coords[:len(k_idx), 1], c='blue', label='Known')
+            ax.scatter(coords[len(k_idx):, 0], coords[len(k_idx):, 1], c='red', marker='X', s=100, label='Questioned')
+            for i, txt in enumerate(z_word.index):
+                ax.annotate(txt, (coords[i, 0], coords[i, 1]), size=8)
+            ax.legend()
+            st.pyplot(fig)
+    
+        with at2:
+            dist_mat = cdist(z_word.loc[q_idx], z_word.loc[k_idx], metric='cityblock')
+            st.write("### Distance Matrix (Manhattan Distance)")
+            st.dataframe(pd.DataFrame(dist_mat, index=q_idx, columns=k_idx).style.background_gradient(cmap='RdYlGn_r'))
+    
+        with at3:
+            results = []
+            dist_mat = cdist(z_word.loc[q_idx], z_word.loc[k_idx], metric='cityblock')
+            k_internal_dists = pdist(z_word.loc[k_idx], metric='cityblock')
+            outlier_threshold = np.mean(k_internal_dists) + np.std(k_internal_dists)
+    
+            for i, q in enumerate(q_idx):
+                dists = dist_mat[i]
+                min_dist = np.min(dists)
+                sorted_indices = np.argsort(dists)
+                match_idx, runner_up_idx = sorted_indices[0], sorted_indices[1]
+                confidence = (dists[runner_up_idx] - dists[match_idx]) / dists[runner_up_idx]
+                is_outlier = min_dist > outlier_threshold
+                results.append({
+                    "Questioned": q, "Top Match": k_idx[match_idx], 
+                    "Confidence": f"{confidence:.2%}",
+                    "Status": "Outlier" if is_outlier else "Closely Similar",
+                    "Dist_Val": min_dist
+                })
+    
+            def color_status(val):
+                color = 'red' if val == 'Outlier' else 'green'
+                return f'color: {color}; font-weight: bold'
+    
+            df_display = pd.DataFrame(results).drop(columns=['Dist_Val'])
+            st.subheader("🏆 Attribution & Delta Rank")
+            st.dataframe(df_display.style.map(color_status, subset=['Status']), use_container_width=True)
+            st.download_button("📥 Download Results (CSV)", df_display.to_csv(index=False), "attribution.csv")
+    
+            st.info("### 📝 Automated Authorship Narration")
+            similar_texts = [r['Questioned'] for r in results if r['Status'] == "Closely Similar"]
+            outlier_texts = [r['Questioned'] for r in results if r['Status'] == "Outlier"]
+            
+            if similar_texts:
+                st.markdown("**✅ Possibility One (High Similarity):**")
+                st.write(f"The texts **{', '.join(similar_texts)}** fall within expected variance.")
+            if outlier_texts:
+                st.markdown("**⚠️ Possibility Two (Stylistic Outliers):**")
+                st.write(f"The texts **{', '.join(outlier_texts)}** are statistically distant.")
+            
+            st.divider()
+            st.subheader("🏁 Final Verdict Summary")
+            cv1, cv2, cv3 = st.columns(3)
+            cv1.metric("Total", len(results))
+            cv2.metric("Attributed", len(similar_texts))
+            cv3.metric("Outliers", len(outlier_texts))
+    
+        with at4:
+            st.subheader("🔑 Key Stylistic Markers of Known Texts")
+            known_mean_coord = np.mean(coords[:len(k_idx), 0])
+            direction = 1 if known_mean_coord > 0 else -1
+            weights = pca_mod.components_[0] * direction
+            marker_df = pd.DataFrame({'Word': list(feats_word), 'Weight': weights}).sort_values('Weight', ascending=False)
+            top_markers = marker_df[marker_df['Weight'] > 0].head(15)
+            
+            if not top_markers.empty:
+                col_m1, col_m2 = st.columns([1, 2])
+                with col_m1: st.dataframe(top_markers, hide_index=True)
+                with col_m2: st.bar_chart(top_markers.set_index('Word'))
 
 else:
-    st.info("Load ≥2 documents for exploratory analysis, or upload K/Q files for attribution.")
+    st.warning("Insufficient data. Ensure filenames start with 'K-' and 'Q-'.")
+
 
