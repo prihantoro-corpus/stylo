@@ -99,8 +99,7 @@ st.title("🔬 Stylometry Lab: Lexical, Structural & Attribution")
 
 with st.sidebar:
     st.header("Selection")
-    data_source = st.radio(
-        "Corpus", ["UNRESTRICTED-10", "TAGGED-10", "KNOWN-10", "Upload Files"])
+    data_source = st.radio("Corpus", ["UNRESTRICTED-10", "TAGGED-10", "KNOWN-10", "TAGGED-ATTRIBUTION", "Upload Files"])
     mfw_limit = st.slider("MFW Limit", 50, 2000, 500)
     use_stop = st.checkbox("Filter Stopwords", value=True)
     stop_input = st.text_area(
@@ -119,6 +118,8 @@ elif data_source == "TAGGED-10":
     raw_data = load_corpus("preloaded2")
 elif data_source == "KNOWN-10":
     raw_data = load_corpus("preloaded3")
+elif data_source == "TAGGED-ATTRIBUTION":
+    raw_data = load_corpus("preloaded4")
 else:
     uploaded = st.file_uploader("Upload .txt or .tsv files",
                                 accept_multiple_files=True)
@@ -278,7 +279,7 @@ if len(raw_data) >= 2:
 
 # --- SCENARIO 3: ATTRIBUTION ---
     # We allow this for KNOWN-10 OR Uploaded files so long as K/Q naming exists
-    if data_source == "KNOWN-10" or data_source == "Upload Files":
+    if data_source in ["KNOWN-10", "TAGGED-ATTRIBUTION", "Upload Files"]:
         st.divider()
         st.header("🔍 Scenario 3: Lexical Attribution")
 
@@ -388,6 +389,43 @@ if len(raw_data) >= 2:
 
         else:
             st.warning("Insufficient data. Ensure filenames start with 'K-' and 'Q-'.")
+#=======
+# --- SCENARIO 4: GRAMMATICAL PROFILER (New Feature) ---
+    # Only trigger if the files have TAGS (TreeTagger format)
+    if any(raw_data[next(iter(raw_data))]['tag']):
+        st.divider()
+        st.header("🧬 Scenario 4: Grammatical Profiler (POS Markers)")
+        
+        # Build matrix using 'tag' layer
+        z_tag_attr, feats_tag_attr = build_matrix(raw_data, 'tag', 100)
+        
+        # Use the same K- and Q- indices from Scenario 3
+        k_idx = [i for i in z_word.index if i.startswith('K-')]
+        
+        if len(k_idx) >= 2:
+            pca_tag_attr = PCA(n_components=2).fit(z_tag_attr)
+            tag_coords = pca_tag_attr.transform(z_tag_attr)
+            
+            # Determine which direction the 'Known' group leans grammatically
+            k_dir_tag = 1 if np.mean(tag_coords[:len(k_idx), 0]) > 0 else -1
+            tag_weights = pca_tag_attr.components_[0] * k_dir_tag
+            
+            marker_tag_df = pd.DataFrame({
+                'POS Tag': feats_tag_attr, 
+                'Strength': tag_weights
+            }).sort_values('Strength', ascending=False)
 
+            st.write("### 🔑 Key Grammatical Markers of Known Author")
+            st.info("These POS (Part-of-Speech) tags represent the structural 'fingerprint' of the Known author.")
+            
+            col_g1, col_g2 = st.columns([1, 2])
+            with col_g1:
+                st.dataframe(marker_tag_df.head(15), hide_index=True)
+            with col_g2:
+                # Visualize the top 10 markers
+                st.bar_chart(marker_tag_df.head(10).set_index('POS Tag'))
+            
+            st.caption("Common Tags: NN (Noun), VBD (Verb Past), MD (Modal), JJ (Adjective).")
+#=======
 else:
     st.info("Please load or upload at least 2 files to generate analytics.")
