@@ -130,21 +130,6 @@ with st.sidebar:
     st.caption("1 = Single Word, 2 = Bigram (2 words), etc. Higher values capture specific phrasing.")
 
     st.markdown("---")
-    st.header("📂 Authorship Attribution Upload")
-
-    uploaded_known = st.file_uploader(
-        "Known texts (K)",
-        type=["txt", "tsv"],
-        accept_multiple_files=True,
-        key="known_upload"
-    )
-
-    uploaded_questioned = st.file_uploader(
-        "Questioned texts (Q)",
-        type=["txt", "tsv"],
-        accept_multiple_files=True,
-        key="questioned_upload"
-    )
 
 
 # --- 3. DATA PROCESSING ---
@@ -322,6 +307,26 @@ if len(raw_data) >= 2:
 
         st.divider()
         st.header("🔍 Scenario 3: Lexical Attribution")
+        st.subheader("📂 Upload Authorship Data")
+
+        col_k, col_q = st.columns(2)
+        
+        with col_k:
+            uploaded_known = st.file_uploader(
+                "Known texts (K)",
+                type=["txt", "tsv"],
+                accept_multiple_files=True,
+                key="known_upload_main"
+            )
+        
+        with col_q:
+            uploaded_questioned = st.file_uploader(
+                "Questioned texts (Q)",
+                type=["txt", "tsv"],
+                accept_multiple_files=True,
+                key="questioned_upload_main"
+            )
+
         
         k_idx = [i for i in z_word.index if i.startswith('K-')]
         q_idx = [i for i in z_word.index if i.startswith('Q-')]
