@@ -229,7 +229,6 @@ if len(raw_data) >= 2:
         st.write("Top Words driving differences (PC1):")
         st.dataframe(loadings.sort_values('PC1', ascending=False).head(20))
 
-#--------------nih
     with t4:
         st.subheader("Document Network")
         G = nx.Graph()
@@ -315,20 +314,24 @@ if len(raw_data) >= 2:
                                       index=raw_data.keys()).fillna(0)
             st.bar_chart(profile_df)
 
-# --- SCENARIO 3: ATTRIBUTION ---
-    # We allow this for KNOWN-10 OR Uploaded files so long as K/Q naming exists
-    if data_source == "KNOWN-10" or data_source == "Upload Files":
+# === END SCENARIO 1 & 2 ===
+
+# =====================================================
+# --- SCENARIO 3: ATTRIBUTION (INDEPENDENT) ---
+# =====================================================
+
         st.divider()
         st.header("🔍 Scenario 3: Lexical Attribution")
-
+        
         k_idx = [i for i in z_word.index if i.startswith('K-')]
         q_idx = [i for i in z_word.index if i.startswith('Q-')]
-
+        
         with st.expander("📂 View Loaded Data Inventory"):
             st.write(f"Known Files: {len(k_idx)} found.")
             st.write(f"Questioned Files: {len(q_idx)} found.")
-
+        
         if len(k_idx) >= 2 and len(q_idx) >= 1:
+
             # 1. Global Calculations for all tabs
             labels = [n.split('-')[1] if '-' in n else "Unknown" for n in k_idx]
             pca_mod = PCA(n_components=2).fit(z_word)
@@ -429,4 +432,5 @@ if len(raw_data) >= 2:
             st.warning("Insufficient data. Ensure filenames start with 'K-' and 'Q-'.")
 
 else:
-    st.info("Please load or upload at least 2 files to generate analytics.")
+    st.info("Load ≥2 documents for exploratory analysis, or upload K/Q files for attribution.")
+
