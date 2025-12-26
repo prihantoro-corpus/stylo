@@ -314,11 +314,10 @@ if len(raw_data) >= 2:
 
 if 'z_word' not in locals():
     st.info("Upload or load at least 2 texts to enable attribution.")
-else:
 
+else:
     st.divider()
     st.header("🔍 Scenario 3: Lexical Attribution")
-    st.subheader("📂 Upload Authorship Data")
 
     k_idx = [i for i in z_word.index if i.startswith('K-')]
     q_idx = [i for i in z_word.index if i.startswith('Q-')]
@@ -326,8 +325,9 @@ else:
     with st.expander("📂 View Loaded Data Inventory"):
         st.write(f"Known Files: {len(k_idx)} found.")
         st.write(f"Questioned Files: {len(q_idx)} found.")
-    
+
     if len(k_idx) >= 2 and len(q_idx) >= 1:
+        # ✅ FULL ATTRIBUTION CODE (tabs, SVM, Delta, etc.)
     
         # 1. Global Calculations for all tabs
         labels = [n.split('-')[1] if '-' in n else "Unknown" for n in k_idx]
@@ -426,5 +426,6 @@ else:
                 with col_m2: st.bar_chart(top_markers.set_index('Word'))
 
 
-
+    else:
+        st.warning("Insufficient data. Ensure filenames start with 'K-' and 'Q-'.")
 
