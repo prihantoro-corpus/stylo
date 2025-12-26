@@ -504,10 +504,11 @@ if len(raw_data) >= 2:
                     st.error(
                         "PCA model data is missing. Please ensure Scenario 3 / Tab 1 has loaded correctly."
                     )
-    else:
-        st.warning(
+        else:
+            st.warning(
             "Insufficient data for attribution. Ensure filenames start with 'K-' and 'Q-'."
-        )
+            )
 
-else:
-    st.info("Please load or upload at least 2 files to generate analytics.")
+        else:
+            st.info("Please load or upload at least 2 files to generate analytics.")
+
