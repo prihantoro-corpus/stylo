@@ -20,45 +20,43 @@ def load_corpus(folder_path):
 
     def fetch_recursive(current_path):
         api_url = f"{api_base}/{current_path}"
-        try:
-            response = requests.get(api_url)
-            response.raise_for_status()
-            items = response.json()
 
-            for item in items:
-                if item['type'] == 'dir':
-                    fetch_recursive(f"{current_path}/{item['name']}")
+        response = requests.get(api_url)
+        if response.status_code != 200:
+            st.warning(f"⚠️ Failed to fetch {current_path}")
+            return
 
-                elif item['name'].endswith(('.txt', '.tsv')):
-                    raw_url = f"{raw_base}/{current_path}/{item['name']}"
-                    r = requests.get(raw_url)
-                    r.raise_for_status()
-                    lines = r.text.strip().split('\n')
+        items = response.json()
 
-                    if '\t' in lines[0]:
-                        data = [line.split('\t') for line in lines if '\t' in line]
-                        corpus[item['name']] = {
-                            'word': [row[0].lower() for row in data if len(row) > 0],
-                            'tag': [row[1] for row in data if len(row) > 1],
-                            'lemma': [row[2].lower() for row in data if len(row) > 2],
-                        }
-                    else:
-                        words = re.findall(
-                            r"[\w']+|[.,!?;:()\"-]", r.text.lower()
-                        )
-                        corpus[item['name']] = {
-                            'word': words,
-                            'tag': [],
-                            'lemma': [],
-                        }
+        for item in items:
+            if item["type"] == "dir":
+                fetch_recursive(f"{current_path}/{item['name']}")
 
-        except Exception as e:
-            st.warning(f"⚠️ Failed to fetch {current_path}: {e}")
+            elif item["name"].endswith((".txt", ".tsv")):
+                raw_url = f"{raw_base}/{current_path}/{item['name']}"
+                r = requests.get(raw_url)
+                if r.status_code != 200:
+                    continue
 
-    # ⬇⬇⬇ THIS MUST BE OUTSIDE try/except
+                lines = r.text.strip().split("\n")
+
+                if "\t" in lines[0]:
+                    data = [l.split("\t") for l in lines if "\t" in l]
+                    corpus[item["name"]] = {
+                        "word": [row[0].lower() for row in data],
+                        "tag": [row[1] for row in data],
+                        "lemma": [row[2].lower() for row in data],
+                    }
+                else:
+                    words = re.findall(r"[\w']+|[.,!?;:()\"-]", r.text.lower())
+                    corpus[item["name"]] = {
+                        "word": words,
+                        "tag": [],
+                        "lemma": [],
+                    }
+
     fetch_recursive(folder_path)
     return corpus
-
 
 
 def build_matrix(corpus_dict, layer, mfw_limit, n_size=1, stops=[]):
