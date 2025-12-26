@@ -120,6 +120,11 @@ with st.sidebar:
     n_size = st.slider("N-Gram Size (Phrasal patterns)", 1, 5, 1)
     st.caption("1 = Single Word, 2 = Bigram (2 words), etc. Higher values capture specific phrasing.")
 
+    st.markdown("---")
+    if st.button("🗑️ Clear All Data & Cache"):
+        st.cache_data.clear()
+        st.rerun()
+
 # --- 3. DATA PROCESSING ---
 raw_data = {}
 if data_source == "UNRESTRICTED-10":
@@ -131,8 +136,29 @@ elif data_source == "KNOWN-10":
 elif data_source == "TAGGED-ATTRIBUTION":
     raw_data = load_corpus("preloaded4")
 else:
-    uploaded = st.file_uploader("Upload .txt or .tsv files",
+    uploaded = st.file_uploader("Upload .txt or .tsv files (Prefix with K- or Q- for attribution)",
                                 accept_multiple_files=True)
+    for f in uploaded:
+        content = f.read().decode("utf-8")
+        
+        # Check if the file is a TreeTagger TSV (contains tabs)
+        if f.name.endswith('.tsv') and '\t' in content:
+            lines = content.strip().split('\n')
+            data = [line.split('\t') for line in lines if '\t' in line]
+            raw_data[f.name] = {
+                'word': [r[0].lower() for r in data if len(r) > 0],
+                'tag': [r[1] for r in data if len(r) > 1],
+                'lemma': [r[2].lower() for r in data if len(r) > 2]
+            }
+        else:
+            # Handle as Raw Text but preserve punctuation for N-Grams
+            import re
+            words = re.findall(r"[\w']+|[.,!?;:()\"-]", content.lower())
+            raw_data[f.name] = {
+                'word': words,
+                'tag': [], # No tags for raw TXT
+                'lemma': []
+            }    
     for f in uploaded:
         content = f.read().decode("utf-8")
         if f.name.endswith('.tsv'):
@@ -290,6 +316,7 @@ if len(raw_data) >= 2:
 # --- SCENARIO 3: ATTRIBUTION ---
     # We allow this for KNOWN-10 OR Uploaded files so long as K/Q naming exists
     if data_source in ["KNOWN-10", "TAGGED-ATTRIBUTION", "Upload Files"]:
+    
         st.divider()
         st.header("🔍 Scenario 3: Lexical Attribution")
 
@@ -400,17 +427,19 @@ if len(raw_data) >= 2:
         else:
             st.warning("Insufficient data. Ensure filenames start with 'K-' and 'Q-'.")
 #=======
-# --- SCENARIO 4: GRAMMATICAL PROFILER (New Feature) ---
-    # Only trigger if the files have TAGS (TreeTagger format)
-    if any(raw_data[next(iter(raw_data))]['tag']):
+    # NEW: Detect if ANY file has tags, not just the first one
+    has_tags = any(len(d['tag']) > 0 for d in raw_data.values())
+
+    if has_tags:
         st.divider()
         st.header("🧬 Scenario 4: Grammatical Profiler (POS Markers)")
         
-        # Build matrix using 'tag' layer
-        z_tag_attr, feats_tag_attr = build_matrix(raw_data, 'tag', 100)
+        # Build matrix using 'tag' layer 
+        # NEW: We usually use n_size=1 for POS tags, but you can change this to n_size
+        z_tag_attr, feats_tag_attr = build_matrix(raw_data, 'tag', 100, n_size=1)
         
-        # Use the same K- and Q- indices from Scenario 3
         k_idx = [i for i in z_word.index if i.startswith('K-')]
+        q_idx = [i for i in z_word.index if i.startswith('Q-')] # Ensure Q-idx is also ready
         
         if len(k_idx) >= 2:
             pca_tag_attr = PCA(n_components=2).fit(z_tag_attr)
@@ -432,10 +461,11 @@ if len(raw_data) >= 2:
             with col_g1:
                 st.dataframe(marker_tag_df.head(15), hide_index=True)
             with col_g2:
-                # Visualize the top 10 markers
                 st.bar_chart(marker_tag_df.head(10).set_index('POS Tag'))
             
             st.caption("Common Tags: NN (Noun), VBD (Verb Past), MD (Modal), JJ (Adjective).")
+
+
 #=======
 else:
     st.info("Please load or upload at least 2 files to generate analytics.")
