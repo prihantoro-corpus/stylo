@@ -131,6 +131,19 @@ with st.sidebar:
 
     st.markdown("---")
 
+uploaded_known = []
+uploaded_questioned = []
+if data_source == "Upload Files":
+    uploaded_known = st.file_uploader(
+        "Upload Known texts",
+        accept_multiple_files=True,
+        key="known"
+    )
+    uploaded_questioned = st.file_uploader(
+        "Upload Questioned texts",
+        accept_multiple_files=True,
+        key="questioned"
+    )
 
 # --- 3. DATA PROCESSING ---
 raw_data = {}
@@ -155,6 +168,12 @@ elif data_source == "Upload Files":
     for f in uploaded or []:
         raw_data[f.name] = parse_uploaded_file(f)
 
+# --- Authorship uploads (Scenario 3) ---
+for f in uploaded_known:
+    raw_data[f"K-{f.name}"] = parse_uploaded_file(f)
+
+for f in uploaded_questioned:
+    raw_data[f"Q-{f.name}"] = parse_uploaded_file(f)
 
 
 # --- 4. ANALYTICS ENGINES ---
