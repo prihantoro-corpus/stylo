@@ -91,7 +91,8 @@ def build_matrix(corpus_dict, layer, mfw_limit, stops=[]):
     df_std = df.std().replace(0, 1)
     z_scores = (df - df.mean()) / df_std
     return z_scores.fillna(0), top_feats
-    
+
+
 # --- 2. APP CONFIG & SIDEBAR ---
 st.set_page_config(page_title="Stylo-Lab Professional", layout="wide")
 st.title("🔬 Stylometry Lab: Lexical, Structural & Attribution")
@@ -105,12 +106,10 @@ with st.sidebar:
     stop_input = st.text_area(
         "Stopwords", "the, and, of, to, a, in, is, it, that, was").lower()
     stop_list = [w.strip() for w in stop_input.split(",") if w.strip()]
-    
+
     st.markdown("---")
     st.header("Network Settings")
     net_threshold = st.slider("Connection Sensitivity (Percentile)", 5, 95, 25)
-
-
 
 # --- 3. DATA PROCESSING ---
 raw_data = {}
@@ -161,15 +160,16 @@ if len(raw_data) >= 2:
                    orientation='left',
                    ax=ax)
         st.pyplot(fig)
-        
-# New suggestion logic
+
+        # New suggestion logic
         st.info("💡 **Cluster Suggestion**")
         last = linkage(z_word, 'ward')[-10:, 2]
-        acceleration = np.diff(last, 2) 
+        acceleration = np.diff(last, 2)
         suggested_k = acceleration.argmax() + 2
-        st.write(f"Based on variance, **{suggested_k} clusters** is likely optimal.")
+        st.write(
+            f"Based on variance, **{suggested_k} clusters** is likely optimal."
+        )
 
-    
     with t2:
         st.subheader("PCA Visualization")
         pca_coords = PCA(n_components=2).fit_transform(z_word)
@@ -196,9 +196,9 @@ if len(raw_data) >= 2:
         G = nx.Graph()
         dist_matrix = squareform(pdist(z_word, metric='cityblock'))
         # Use the slider value from the sidebar here:
-        threshold = np.percentile(dist_matrix, net_threshold) 
+        threshold = np.percentile(dist_matrix, net_threshold)
         for i, ni in enumerate(raw_data.keys()):
-#--------------------------- nih
+            #--------------------------- nih
             for j, nj in enumerate(raw_data.keys()):
                 if i < j and dist_matrix[i, j] < threshold: G.add_edge(ni, nj)
         fig, ax = plt.subplots()
@@ -208,11 +208,13 @@ if len(raw_data) >= 2:
     with t5:
         st.download_button("Download Z-Scores (CSV)", z_word.to_csv(),
                            "lexical_zscores.csv")
-        
-        search_query = st.text_input("🔍 Search for a specific word in the Z-scores:")
+
+        search_query = st.text_input(
+            "🔍 Search for a specific word in the Z-scores:")
         if search_query:
             # Filters columns that contain the search string
-            filtered_df = z_word[z_word.columns[z_word.columns.str.contains(search_query.lower())]]
+            filtered_df = z_word[z_word.columns[z_word.columns.str.contains(
+                search_query.lower())]]
             st.dataframe(filtered_df)
         else:
             st.dataframe(z_word)
@@ -286,17 +288,19 @@ if len(raw_data) >= 2:
             st.write(f"Known Files: {len(k_idx)} found.")
             st.write(f"Questioned Files: {len(q_idx)} found.")
 
-
         if len(k_idx) >= 2 and len(q_idx) >= 1:
             # Calculate PCA once here so ALL tabs can see 'pca_mod' and 'coords'
-            labels = [n.split('-')[1] if '-' in n else "Unknown" for n in k_idx]
+            labels = [
+                n.split('-')[1] if '-' in n else "Unknown" for n in k_idx
+            ]
             pca_mod = PCA(n_components=2).fit(z_word)
             coords = pca_mod.transform(z_word)
 
             at1, at2, at3, at4 = st.tabs([
-                "🗺️ Attribution Zones", "🎯 Accuracy/Confusion", "🏆 Delta Rank", "🔑 Known Markers"
+                "🗺️ Attribution Zones", "🎯 Accuracy/Confusion", "🏆 Delta Rank",
+                "🔑 Known Markers"
             ])
-            
+
             with at1:
                 st.subheader("Authorship Zones (SVM)")
                 # (Keep your fig, ax, and SVM plot code here, but remove the pca_mod/coords lines from inside here)
@@ -352,32 +356,34 @@ if len(raw_data) >= 2:
 
             with at3:
                 results = []
-                
+
                 # Statistical Threshold Logic:
                 # We calculate how varied the 'Known' texts are to find a 'normal' distance
                 k_internal_dists = pdist(z_word.loc[k_idx], metric='cityblock')
-                outlier_threshold = np.mean(k_internal_dists) + np.std(k_internal_dists)
+                outlier_threshold = np.mean(k_internal_dists) + np.std(
+                    k_internal_dists)
 
                 for i, q in enumerate(q_idx):
                     dists = dist_mat[i]
-                    min_dist = np.min(dists) # Closest distance found
+                    min_dist = np.min(dists)  # Closest distance found
                     sorted_indices = np.argsort(dists)
                     match_idx = sorted_indices[0]
                     runner_up_idx = sorted_indices[1]
-                    
-                    confidence = (dists[runner_up_idx] - dists[match_idx]) / dists[runner_up_idx]
-                    
+
+                    confidence = (dists[runner_up_idx] -
+                                  dists[match_idx]) / dists[runner_up_idx]
+
                     # Assign a status based on the threshold
                     is_outlier = min_dist > outlier_threshold
-                    
+
                     results.append({
-                        "Questioned": q, 
+                        "Questioned": q,
                         "Top Match": k_idx[match_idx],
                         "Confidence": f"{confidence:.2%}",
-                        "Status": "Outlier" if is_outlier else "Closely Similar",
-                        "Dist_Val": min_dist # Stored for narration logic
+                        "Status":
+                        "Outlier" if is_outlier else "Closely Similar",
+                        "Dist_Val": min_dist  # Stored for narration logic
                     })
-
 
                 # 1. Define the coloring function
                 def color_status(val):
@@ -390,7 +396,9 @@ if len(raw_data) >= 2:
 
                 # 3. Display the interactive, color-coded table
                 st.subheader("🏆 Attribution & Delta Rank")
-                st.dataframe(df_display.style.map(color_status, subset=['Status']), use_container_width=True)
+                st.dataframe(df_display.style.map(color_status,
+                                                  subset=['Status']),
+                             use_container_width=True)
 
                 # 4. Add the Download Button
                 csv = df_display.to_csv(index=False).encode('utf-8')
@@ -400,77 +408,106 @@ if len(raw_data) >= 2:
                     file_name="attribution_results.csv",
                     mime="text/csv",
                 )
-                
+
                 st.info("### 📝 Automated Authorship Narration")
-                
+
                 # Filter Q-files by their status for tailored narration
-                similar_texts = [r['Questioned'] for r in results if r['Status'] == "Closely Similar"]
-                outlier_texts = [r['Questioned'] for r in results if r['Status'] == "Outlier"]
+                similar_texts = [
+                    r['Questioned'] for r in results
+                    if r['Status'] == "Closely Similar"
+                ]
+                outlier_texts = [
+                    r['Questioned'] for r in results
+                    if r['Status'] == "Outlier"
+                ]
 
                 # Narration for Possibility One (Close matches)
                 if similar_texts:
                     st.markdown("**✅ Possibility One (High Similarity):**")
-                    st.write(f"The texts **{', '.join(similar_texts)}** are closely similar to the known stylistic profiles. They fall within the expected stylistic variance of your 'Known' corpus.")
+                    st.write(
+                        f"The texts **{', '.join(similar_texts)}** are closely similar to the known stylistic profiles. They fall within the expected stylistic variance of your 'Known' corpus."
+                    )
 
                 # Narration for Possibility Two (Outliers)
                 if outlier_texts:
                     st.markdown("**⚠️ Possibility Two (Stylistic Outliers):**")
-                    st.write(f"The texts **{', '.join(outlier_texts)}** are NOT closely similar to the known samples. While the system assigned them a match, they are statistically distant (Outliers), suggesting they may belong to an author not represented in your current 'Known' data.")
+                    st.write(
+                        f"The texts **{', '.join(outlier_texts)}** are NOT closely similar to the known samples. While the system assigned them a match, they are statistically distant (Outliers), suggesting they may belong to an author not represented in your current 'Known' data."
+                    )
 
                 # Narration for Possibility Three (Internal Patterns)
                 st.markdown("**🔍 Possibility Three (Internal Clustering):**")
-                st.write("Examine the Scatter Plot in the 'Attribution Zones' tab. If outlier texts are clustering together in the red 'X' marks, it implies they share an author with each other, even if they don't match your 'Known' samples.")
+                st.write(
+                    "Examine the Scatter Plot in the 'Attribution Zones' tab. If outlier texts are clustering together in the red 'X' marks, it implies they share an author with each other, even if they don't match your 'Known' samples."
+                )
 
                 st.divider()
                 st.subheader("🏁 Final Verdict Summary")
-                
+
                 total_q = len(results)
                 attributed_count = len(similar_texts)
                 outlier_count = len(outlier_texts)
-                
+
                 col_v1, col_v2, col_v3 = st.columns(3)
                 col_v1.metric("Total Questioned", total_q)
-                col_v2.metric("Attributed", attributed_count, delta=f"{attributed_count/total_q:.0%}")
-                col_v3.metric("Outliers", outlier_count, delta=f"-{outlier_count/total_q:.0%}", delta_color="inverse")
+                col_v2.metric("Attributed",
+                              attributed_count,
+                              delta=f"{attributed_count/total_q:.0%}")
+                col_v3.metric("Outliers",
+                              outlier_count,
+                              delta=f"-{outlier_count/total_q:.0%}",
+                              delta_color="inverse")
 
                 if outlier_count > (total_q / 2):
-                    st.warning("🚨 **Observation:** The majority of questioned texts are outliers. This suggests the actual author is likely not in your 'Known' set.")
+                    st.warning(
+                        "🚨 **Observation:** The majority of questioned texts are outliers. This suggests the actual author is likely not in your 'Known' set."
+                    )
                 else:
-                    st.success("✅ **Observation:** Most texts show strong stylistic alignment with the 'Known' samples.")
-            
+                    st.success(
+                        "✅ **Observation:** Most texts show strong stylistic alignment with the 'Known' samples."
+                    )
+
             with at4:
                 st.subheader("🔑 Key Stylistic Markers of Known Texts")
-                
+
                 # Check if PCA was successful
                 if 'pca_mod' in locals() and len(feats_word) > 0:
                     # We look at the first component (PC1) which usually separates the authors
                     known_mean_coord = np.mean(coords[:len(k_idx), 0])
                     direction = 1 if known_mean_coord > 0 else -1
-                    
+
                     weights = pca_mod.components_[0] * direction
-                    
+
                     # Create the dataframe safely
                     marker_df = pd.DataFrame({
                         'Word': list(feats_word),
                         'Weight': weights
                     }).sort_values('Weight', ascending=False)
-                    
+
                     # Filter for only positive weights (words that characterize the Knowns)
                     top_markers = marker_df[marker_df['Weight'] > 0].head(15)
-                    
+
                     if not top_markers.empty:
-                        st.write("These words appear more significantly in your **Known** corpus than in the other texts:")
+                        st.write(
+                            "These words appear more significantly in your **Known** corpus than in the other texts:"
+                        )
                         col_m1, col_m2 = st.columns([1, 2])
                         with col_m1:
                             st.dataframe(top_markers, hide_index=True)
                         with col_m2:
                             st.bar_chart(top_markers.set_index('Word'))
                     else:
-                        st.warning("No distinct markers found. The stylistic difference may be too subtle.")
+                        st.warning(
+                            "No distinct markers found. The stylistic difference may be too subtle."
+                        )
                 else:
-                    st.error("PCA model data is missing. Please ensure Scenario 3 / Tab 1 has loaded correctly.")
+                    st.error(
+                        "PCA model data is missing. Please ensure Scenario 3 / Tab 1 has loaded correctly."
+                    )
     else:
-            st.warning("Insufficient data for attribution. Ensure filenames start with 'K-' and 'Q-'.")
+        st.warning(
+            "Insufficient data for attribution. Ensure filenames start with 'K-' and 'Q-'."
+        )
 
 else:
     st.info("Please load or upload at least 2 files to generate analytics.")
