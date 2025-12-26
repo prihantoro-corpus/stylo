@@ -308,13 +308,14 @@ if len(raw_data) >= 2:
             profile_df = pd.DataFrame(profile_data,
                                       index=raw_data.keys()).fillna(0)
             st.bar_chart(profile_df)
+    # =====================================================
+    # --- SCENARIO 3: ATTRIBUTION (INDEPENDENT) ---
+    # =====================================================
 
 if 'z_word' not in locals():
     st.info("Upload or load at least 2 texts to enable attribution.")
 else:
-    # =====================================================
-    # --- SCENARIO 3: ATTRIBUTION (INDEPENDENT) ---
-    # =====================================================
+
     st.divider()
     st.header("🔍 Scenario 3: Lexical Attribution")
     st.subheader("📂 Upload Authorship Data")
@@ -424,7 +425,6 @@ else:
                 with col_m1: st.dataframe(top_markers, hide_index=True)
                 with col_m2: st.bar_chart(top_markers.set_index('Word'))
 
-else:
-    st.warning("Insufficient data. Ensure filenames start with 'K-' and 'Q-'.")
+
 
 
