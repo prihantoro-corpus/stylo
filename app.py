@@ -14,11 +14,8 @@ from sklearn.svm import SVC
 # --- 1. DATA LOADING & MULTI-LAYER PARSING ---
 @st.cache_data(show_spinner="Fetching Corpora...")
 @st.cache_data(show_spinner="Fetching Corpora...")
+@st.cache_data(show_spinner="Fetching Corpora...")
 def load_corpus(folder_path):
-    """
-    Recursively fetches files from GitHub to handle nested subfolders
-    like preloaded3/known3 and preloaded3/question3.
-    """
     api_base = "https://api.github.com/repos/prihantoro-corpus/stylo/contents"
     raw_base = "https://raw.githubusercontent.com/prihantoro-corpus/stylo/main"
     corpus = {}
@@ -40,25 +37,27 @@ def load_corpus(folder_path):
                     r.raise_for_status()
                     lines = r.text.strip().split('\n')
 
-                    # TSV / TreeTagger
                     if '\t' in lines[0]:
                         data = [line.split('\t') for line in lines if '\t' in line]
                         corpus[item['name']] = {
                             'word': [row[0].lower() for row in data if len(row) > 0],
-                            'tag':  [row[1] for row in data if len(row) > 1],
-                            'lemma':[row[2].lower() for row in data if len(row) > 2]
+                            'tag': [row[1] for row in data if len(row) > 1],
+                            'lemma': [row[2].lower() for row in data if len(row) > 2],
                         }
                     else:
-                        words = re.findall(r"[\w']+|[.,!?;:()\"-]", r.text.lower())
+                        words = re.findall(
+                            r"[\w']+|[.,!?;:()\"-]", r.text.lower()
+                        )
                         corpus[item['name']] = {
                             'word': words,
                             'tag': [],
-                            'lemma': []
+                            'lemma': [],
                         }
 
         except Exception as e:
             st.warning(f"⚠️ Failed to fetch {current_path}: {e}")
 
+    # ⬇⬇⬇ THIS MUST BE OUTSIDE try/except
     fetch_recursive(folder_path)
     return corpus
 
