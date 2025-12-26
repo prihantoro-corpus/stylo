@@ -295,8 +295,9 @@ if len(raw_data) >= 2:
                 labels = [
                     n.split('-')[1] if '-' in n else "Unknown" for n in k_idx
                 ]
-                pca_mod = PCA(n_components=2)
-                coords = pca_mod.fit_transform(z_word)
+
+                pca_mod = PCA(n_components=2).fit(z_word) # Explicitly fit
+                coords = pca_mod.transform(z_word)
 
                 fig, ax = plt.subplots(figsize=(10, 7))
                 if len(set(labels)) > 1:
