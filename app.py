@@ -435,6 +435,38 @@ if len(raw_data) >= 2:
                     st.warning("🚨 **Observation:** The majority of questioned texts are outliers. This suggests the actual author is likely not in your 'Known' set.")
                 else:
                     st.success("✅ **Observation:** Most texts show strong stylistic alignment with the 'Known' samples.")
+            
+            with at4:
+                st.subheader("🔑 Key Stylistic Markers of Known Texts")
+                
+                # Check if PCA was successful
+                if 'pca_mod' in locals() and len(feats_word) > 0:
+                    # We look at the first component (PC1) which usually separates the authors
+                    known_mean_coord = np.mean(coords[:len(k_idx), 0])
+                    direction = 1 if known_mean_coord > 0 else -1
+                    
+                    weights = pca_mod.components_[0] * direction
+                    
+                    # Create the dataframe safely
+                    marker_df = pd.DataFrame({
+                        'Word': list(feats_word),
+                        'Weight': weights
+                    }).sort_values('Weight', ascending=False)
+                    
+                    # Filter for only positive weights (words that characterize the Knowns)
+                    top_markers = marker_df[marker_df['Weight'] > 0].head(15)
+                    
+                    if not top_markers.empty:
+                        st.write("These words appear more significantly in your **Known** corpus than in the other texts:")
+                        col_m1, col_m2 = st.columns([1, 2])
+                        with col_m1:
+                            st.dataframe(top_markers, hide_index=True)
+                        with col_m2:
+                            st.bar_chart(top_markers.set_index('Word'))
+                    else:
+                        st.warning("No distinct markers found. The stylistic difference may be too subtle.")
+                else:
+                    st.error("PCA model data is missing. Please ensure Scenario 3 / Tab 1 has loaded correctly.")
         else:
             st.warning(
                 "Insufficient data for attribution. Ensure filenames start with 'K-' and 'Q-'."
