@@ -286,18 +286,20 @@ if len(raw_data) >= 2:
             st.write(f"Known Files: {len(k_idx)} found.")
             st.write(f"Questioned Files: {len(q_idx)} found.")
 
-        if len(k_idx) >= 2 and len(q_idx) >= 1:            
+
+        if len(k_idx) >= 2 and len(q_idx) >= 1:
+            # Calculate PCA once here so ALL tabs can see 'pca_mod' and 'coords'
+            labels = [n.split('-')[1] if '-' in n else "Unknown" for n in k_idx]
+            pca_mod = PCA(n_components=2).fit(z_word)
+            coords = pca_mod.transform(z_word)
+
             at1, at2, at3, at4 = st.tabs([
                 "🗺️ Attribution Zones", "🎯 Accuracy/Confusion", "🏆 Delta Rank", "🔑 Known Markers"
             ])
+            
             with at1:
                 st.subheader("Authorship Zones (SVM)")
-                labels = [
-                    n.split('-')[1] if '-' in n else "Unknown" for n in k_idx
-                ]
-
-                pca_mod = PCA(n_components=2).fit(z_word) # Explicitly fit
-                coords = pca_mod.transform(z_word)
+                # (Keep your fig, ax, and SVM plot code here, but remove the pca_mod/coords lines from inside here)
 
                 fig, ax = plt.subplots(figsize=(10, 7))
                 if len(set(labels)) > 1:
@@ -467,7 +469,7 @@ if len(raw_data) >= 2:
                         st.warning("No distinct markers found. The stylistic difference may be too subtle.")
                 else:
                     st.error("PCA model data is missing. Please ensure Scenario 3 / Tab 1 has loaded correctly.")
-        else:
+    else:
             st.warning("Insufficient data for attribution. Ensure filenames start with 'K-' and 'Q-'.")
 
 else:
