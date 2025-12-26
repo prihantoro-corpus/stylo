@@ -57,6 +57,23 @@ def load_corpus(folder_path):
 
     fetch_recursive(folder_path)
     return corpus
+def parse_uploaded_file(file):
+    content = file.read().decode("utf-8")
+
+    if file.name.endswith(".tsv"):
+        data = [l.split("\t") for l in content.strip().split("\n") if "\t" in l]
+        return {
+            "word": [r[0].lower() for r in data],
+            "tag": [r[1] for r in data],
+            "lemma": [r[2].lower() for r in data],
+        }
+    else:
+        words = re.findall(r"[\w']+|[.,!?;:()\"-]", content.lower())
+        return {
+            "word": words,
+            "tag": [],
+            "lemma": [],
+        }
 
 
 def build_matrix(corpus_dict, layer, mfw_limit, n_size=1, stops=[]):
@@ -112,35 +129,57 @@ with st.sidebar:
     n_size = st.slider("N-Gram Size (Phrasal patterns)", 1, 5, 1)
     st.caption("1 = Single Word, 2 = Bigram (2 words), etc. Higher values capture specific phrasing.")
 
+    st.markdown("---")
+    st.header("📂 Authorship Attribution Upload")
+
+    uploaded_known = st.file_uploader(
+        "Known texts (K)",
+        type=["txt", "tsv"],
+        accept_multiple_files=True,
+        key="known_upload"
+    )
+
+    uploaded_questioned = st.file_uploader(
+        "Questioned texts (Q)",
+        type=["txt", "tsv"],
+        accept_multiple_files=True,
+        key="questioned_upload"
+    )
+
+
 # --- 3. DATA PROCESSING ---
 raw_data = {}
+
+# --- Preloaded corpora ---
 if data_source == "UNRESTRICTED-10":
     raw_data = load_corpus("preloaded1")
+
 elif data_source == "TAGGED-10":
     raw_data = load_corpus("preloaded2")
+
 elif data_source == "KNOWN-10":
     raw_data = load_corpus("preloaded3")
-else:
-    uploaded = st.file_uploader("Upload .txt or .tsv files",
-                                accept_multiple_files=True)
-    for f in uploaded:
-        content = f.read().decode("utf-8")
-        if f.name.endswith('.tsv'):
-            data = [
-                line.split('\t') for line in content.strip().split('\n')
-                if '\t' in line
-            ]
-            raw_data[f.name] = {
-                'word': [r[0].lower() for r in data],
-                'tag': [r[1] for r in data],
-                'lemma': [r[2].lower() for r in data]
-            }
-        else:
-            raw_data[f.name] = {
-                'word': [w for w in content.lower().split() if w.isalpha()],
-                'tag': [],
-                'lemma': []
-            }
+
+# --- Global upload (exploratory / non-attribution) ---
+elif data_source == "Upload Files":
+    uploaded = st.file_uploader(
+        "Upload files (general analysis)",
+        accept_multiple_files=True,
+        type=["txt", "tsv"]
+    )
+    for f in uploaded or []:
+        raw_data[f.name] = parse_uploaded_file(f)
+
+# --- 🔑 Known & Questioned uploads (ALWAYS ACTIVE) ---
+# These are appended regardless of corpus choice
+# Filenames are normalized for Scenario 3 attribution
+
+for f in uploaded_known or []:
+    raw_data[f"K-{f.name}"] = parse_uploaded_file(f)
+
+for f in uploaded_questioned or []:
+    raw_data[f"Q-{f.name}"] = parse_uploaded_file(f)
+
 
 # --- 4. ANALYTICS ENGINES ---
 if len(raw_data) >= 2:
