@@ -467,11 +467,8 @@ if len(raw_data) >= 2:
                         st.warning("No distinct markers found. The stylistic difference may be too subtle.")
                 else:
                     st.error("PCA model data is missing. Please ensure Scenario 3 / Tab 1 has loaded correctly.")
-    else:
+        else:
             st.warning("Insufficient data for attribution. Ensure filenames start with 'K-' and 'Q-'.")
-
-    # There should be NO 'else' here. 
-    # The final 'else' below aligns with 'if len(raw_data) >= 2' at the very top.
 
 else:
     st.info("Please load or upload at least 2 files to generate analytics.")
