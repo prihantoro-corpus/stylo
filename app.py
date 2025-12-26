@@ -286,11 +286,10 @@ if len(raw_data) >= 2:
             st.write(f"Known Files: {len(k_idx)} found.")
             st.write(f"Questioned Files: {len(q_idx)} found.")
 
-        if len(k_idx) >= 2 and len(q_idx) >= 1:
-            at1, at2, at3 = st.tabs([
-                "🗺️ Attribution Zones", "🎯 Accuracy/Confusion", "🏆 Delta Rank"
+        if len(k_idx) >= 2 and len(q_idx) >= 1:            
+            at1, at2, at3, at4 = st.tabs([
+                "🗺️ Attribution Zones", "🎯 Accuracy/Confusion", "🏆 Delta Rank", "🔑 Known Markers"
             ])
-
             with at1:
                 st.subheader("Authorship Zones (SVM)")
                 labels = [
@@ -418,7 +417,23 @@ if len(raw_data) >= 2:
                 # Narration for Possibility Three (Internal Patterns)
                 st.markdown("**🔍 Possibility Three (Internal Clustering):**")
                 st.write("Examine the Scatter Plot in the 'Attribution Zones' tab. If outlier texts are clustering together in the red 'X' marks, it implies they share an author with each other, even if they don't match your 'Known' samples.")
-    #==================================================
+
+                st.divider()
+                st.subheader("🏁 Final Verdict Summary")
+                
+                total_q = len(results)
+                attributed_count = len(similar_texts)
+                outlier_count = len(outlier_texts)
+                
+                col_v1, col_v2, col_v3 = st.columns(3)
+                col_v1.metric("Total Questioned", total_q)
+                col_v2.metric("Attributed", attributed_count, delta=f"{attributed_count/total_q:.0%}")
+                col_v3.metric("Outliers", outlier_count, delta=f"-{outlier_count/total_q:.0%}", delta_color="inverse")
+
+                if outlier_count > (total_q / 2):
+                    st.warning("🚨 **Observation:** The majority of questioned texts are outliers. This suggests the actual author is likely not in your 'Known' set.")
+                else:
+                    st.success("✅ **Observation:** Most texts show strong stylistic alignment with the 'Known' samples.")
         else:
             st.warning(
                 "Insufficient data for attribution. Ensure filenames start with 'K-' and 'Q-'."
