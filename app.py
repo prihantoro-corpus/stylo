@@ -55,10 +55,8 @@ def load_corpus(folder_path):
                                     ]
                                 }
                             else:  # Plain Text
-                                words = [
-                                    w for w in r.text.lower().split()
-                                    if w.isalpha()
-                                ]
+# This regex splits by whitespace but keeps punctuation as separate tokens
+                                words = re.findall(r"[\w']+|[.,!?;:()\"-]", r.text.lower())
                                 corpus[item['name']] = {
                                     'word': words,
                                     'tag': [],
@@ -71,27 +69,36 @@ def load_corpus(folder_path):
     return corpus
 
 
-def build_matrix(corpus_dict, layer, mfw_limit, stops=[]):
-    all_tokens = []
-    for doc in corpus_dict.values():
-        all_tokens.extend([t for t in doc[layer] if t not in stops])
+def build_matrix(corpus_dict, layer, mfw_limit, n_size=1, stops=[]):
+    all_ngram_tokens = []
+    
+    # helper to create n-grams from a list of tokens
+    def get_ngrams(tokens, n):
+        if n == 1:
+            return tokens
+        return [" ".join(tokens[i:i+n]) for i in range(len(tokens)-n+1)]
 
-    if not all_tokens:
+    for doc in corpus_dict.values():
+        tokens = [t for t in doc[layer] if t not in stops]
+        ngrams = get_ngrams(tokens, n_size)
+        all_ngram_tokens.extend(ngrams)
+
+    if not all_ngram_tokens:
         return pd.DataFrame(), []
 
-    top_feats = pd.Series(all_tokens).value_counts().head(mfw_limit).index
+    top_feats = pd.Series(all_ngram_tokens).value_counts().head(mfw_limit).index
 
     matrix = []
     for doc in corpus_dict.values():
-        counts = pd.Series(doc[layer]).value_counts()
+        doc_tokens = [t for t in doc[layer] if t not in stops]
+        doc_ngrams = get_ngrams(doc_tokens, n_size)
+        counts = pd.Series(doc_ngrams).value_counts()
         matrix.append(counts.reindex(top_feats, fill_value=0))
 
     df = pd.DataFrame(matrix, index=corpus_dict.keys())
-    # Standardize (Z-score) and handle empty/constant data
     df_std = df.std().replace(0, 1)
     z_scores = (df - df.mean()) / df_std
     return z_scores.fillna(0), top_feats
-
 
 # --- 2. APP CONFIG & SIDEBAR ---
 st.set_page_config(page_title="Stylo-Lab Professional", layout="wide")
@@ -109,6 +116,8 @@ with st.sidebar:
     st.markdown("---")
     st.header("Network Settings")
     net_threshold = st.slider("Connection Sensitivity (Percentile)", 5, 95, 25)
+    n_size = st.slider("N-Gram Size (Phrasal patterns)", 1, 5, 1)
+    st.caption("1 = Single Word, 2 = Bigram (2 words), etc. Higher values capture specific phrasing.")
 
 # --- 3. DATA PROCESSING ---
 raw_data = {}
@@ -144,8 +153,8 @@ else:
 
 # --- 4. ANALYTICS ENGINES ---
 if len(raw_data) >= 2:
-    z_word, feats_word = build_matrix(raw_data, 'word', mfw_limit,
-                                      stop_list if use_stop else [])
+
+    z_word, feats_word = build_matrix(raw_data, 'word', mfw_limit, n_size=n_size, stops=stop_list if use_stop else [])
 
     # --- SCENARIO 1: LEXICAL EXPLORER ---
     st.header("📦 Scenario 1: Lexical Explorer (Words)")
