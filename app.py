@@ -115,7 +115,7 @@ st.title("🔬 Stylometry Lab: Lexical, Structural & Attribution")
 with st.sidebar:
     st.header("Selection")
     data_source = st.radio(
-        "Corpus", ["UNRESTRICTED-10", "TAGGED-10", "KNOWN-10", "Upload Files"])
+        "Corpus", ["UNRESTRICTED-10", "TAGGED-10", "KNOWN-10", "PRELOADED-4", "Upload Files"])
     mfw_limit = st.slider("MFW Limit", 50, 2000, 500)
     use_stop = st.checkbox("Filter Stopwords", value=True)
     stop_input = st.text_area(
@@ -157,6 +157,8 @@ elif data_source == "TAGGED-10":
 
 elif data_source == "KNOWN-10":
     raw_data = load_corpus("preloaded3")
+elif data_source == "PRELOADED-4":
+    raw_data = load_corpus("preloaded4")
 
 # --- Global upload (exploratory / non-attribution) ---
 elif data_source == "Upload Files":
