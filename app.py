@@ -198,7 +198,9 @@ if len(raw_data) >= 2:
         # New suggestion logic
         st.info("💡 **Cluster Suggestion**")
         Z = linkage(z_word, method='ward', metric='euclidean')
-        last = Z[-10:, 2]
+        n = min(10, Z.shape[0])
+        last = Z[-n:, 2]
+
 
         acceleration = np.diff(last, 2)
         suggested_k = acceleration.argmax() + 2
