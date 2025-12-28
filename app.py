@@ -114,6 +114,8 @@ st.title("🔬 Stylometry Lab: Lexical, Structural & Attribution")
 
 with st.sidebar:
     st.header("Selection")
+    st.markdown("[📖 Documentation/Manual](https://docs.google.com/document/d/1owTGOVpF7h1kypKs9BWX4Zh_CvtpbrRgfjL_L2rY6WM/edit?usp=sharing)")
+    st.markdown("---")
     data_source = st.radio(
         "Corpus", ["UNRESTRICTED-10", "TAGGED-10", "KNOWN-10", "PRELOADED-4", "Upload Files"])
     mfw_limit = st.slider("MFW Limit", 50, 2000, 500)
