@@ -1,9 +1,12 @@
-scikit-learn
-networkx
-scipy
-matplotlib
-pandas
-requests
-streamlit
+python==3.11
+
+streamlit==1.30.0
 altair==4.2.2
 
+numpy==1.26.4
+pandas
+scipy
+scikit-learn
+matplotlib
+networkx
+requests
